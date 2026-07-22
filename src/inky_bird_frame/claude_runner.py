@@ -38,7 +38,7 @@ from .prompts import profile_prompt, reference_list
 if TYPE_CHECKING:
     from PIL import Image
 
-ANTHROPIC_MODEL: Final = "claude-opus-4-8"
+ANTHROPIC_MODEL: Final = "claude-sonnet-5"
 # Nano Banana Pro. The base gemini-2.5-flash-image model tops out around 1K,
 # which would be upscaled ~1.4x to the 1200x1600 canonical plate and soften the
 # fine linework the e-paper panel depends on; the Pro model's 2K output covers
@@ -505,6 +505,10 @@ class ClaudeRunner:
         params: dict[str, Any] = {
             "model": ANTHROPIC_MODEL,
             "max_tokens": MAX_OUTPUT_TOKENS,
+            # Structuring is deterministic extraction from the notes; disable
+            # thinking explicitly so it stays cheap on models (e.g. Sonnet 5)
+            # that would otherwise run adaptive thinking when it is omitted.
+            "thinking": {"type": "disabled"},
             "output_config": {
                 "format": {"type": "json_schema", "schema": supported_schema(schema)}
             },

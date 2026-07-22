@@ -97,7 +97,7 @@ class IllustrationPromptTests(unittest.TestCase):
         self.assertIn("avoid soft gradients", prompt)
 
     def test_generator_label_names_both_models(self) -> None:
-        self.assertIn("claude-opus-4-8", GENERATOR_LABEL)
+        self.assertIn("claude-sonnet-5", GENERATOR_LABEL)
         self.assertIn("gemini-3-pro-image", GENERATOR_LABEL)
 
 

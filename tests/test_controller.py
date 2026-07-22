@@ -124,7 +124,7 @@ class GenerationRunnerFactoryTests(unittest.TestCase):
             runner = create_generation_runner(config, Path(temporary))
 
         self.assertIsInstance(runner, ClaudeRunner)
-        self.assertIn("claude-opus-4-8", runner.generator_label)
+        self.assertIn("claude-sonnet-5", runner.generator_label)
 
 
 class ControllerTests(unittest.TestCase):
