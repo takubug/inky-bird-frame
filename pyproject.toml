@@ -14,11 +14,17 @@ dependencies = [
 controller = [
     "apprise>=1.12.0,<2",
 ]
+claude = [
+    "anthropic>=0.116",
+    "google-genai>=1.28",
+]
 inky = [
     "inky>=2.4",
 ]
 dev = [
+    "anthropic>=0.116",
     "apprise>=1.12.0,<2",
+    "google-genai>=1.28",
     "mypy>=1.8.0",
     "pytest>=8.0.0",
     "ruff>=0.4.0",
