@@ -1,14 +1,19 @@
 from __future__ import annotations
 
 import unittest
+from pathlib import Path
+from tempfile import TemporaryDirectory
 
 from inky_bird_frame.birds import BirdSpecies
 from inky_bird_frame.claude_runner import (
     GENERATOR_LABEL,
+    SPECTRA6_PALETTE,
     _final_text,
     _inline_image_bytes,
     composite_plate_labels,
     illustration_prompt,
+    review_prompt_with_preview,
+    spectra_panel_preview,
 )
 from inky_bird_frame.errors import GenerationError
 from inky_bird_frame.images import PAPER_COLOR, PORTRAIT_SIZE
@@ -84,9 +89,14 @@ class IllustrationPromptTests(unittest.TestCase):
         self.assertIn("Correction required", prompt)
         self.assertIn("The eye-ring is too wide.", prompt)
 
+    def test_prompt_constrains_style_for_the_epaper_panel(self) -> None:
+        prompt = illustration_prompt(_species(), _profile(), [_reference()])
+        self.assertIn("six-color e-paper", prompt)
+        self.assertIn("avoid soft gradients", prompt)
+
     def test_generator_label_names_both_models(self) -> None:
         self.assertIn("claude-opus-4-8", GENERATOR_LABEL)
-        self.assertIn("gemini-2.5-flash-image", GENERATOR_LABEL)
+        self.assertIn("gemini-3-pro-image", GENERATOR_LABEL)
 
 
 class CompositeLabelTests(unittest.TestCase):
@@ -98,6 +108,47 @@ class CompositeLabelTests(unittest.TestCase):
         self.assertEqual(image.size, PORTRAIT_SIZE)
         blank = Image.new("RGB", PORTRAIT_SIZE, PAPER_COLOR)
         self.assertIsNotNone(ImageChops.difference(image, blank).getbbox())
+        # Labels must use pure black, a native panel pigment that dithers cleanly.
+        color_counts = image.getcolors(1_000_000)
+        assert color_counts is not None
+        self.assertIn((0, 0, 0), {color for _, color in color_counts})
+
+
+class ReviewPromptTests(unittest.TestCase):
+    def test_preview_prompt_shifts_image_indices_for_the_panel_preview(self) -> None:
+        prompt = review_prompt_with_preview(
+            _species(),
+            _profile(),
+            [_reference()],
+            ("birds.example", "field.example"),
+        )
+        self.assertIn("Image 2 is the same candidate quantized", prompt)
+        self.assertIn("Images 3 onward", prompt)
+        self.assertIn("black, white, red, yellow, green, blue", prompt)
+        self.assertIn("birds.example, field.example", prompt)
+
+
+class SpectraPreviewTests(unittest.TestCase):
+    def test_preview_quantizes_to_the_panel_palette(self) -> None:
+        from PIL import Image
+
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "plate.png"
+            gradient = Image.new("RGB", (64, 64))
+            gradient.putdata([(x * 4, y * 4, 128) for y in range(64) for x in range(64)])
+            gradient.save(source)
+            destination = root / "logs" / "preview.png"
+
+            spectra_panel_preview(source, destination)
+
+            with Image.open(destination) as preview:
+                color_counts = preview.convert("RGB").getcolors(64 * 64)
+
+        assert color_counts is not None
+        colors = {color for _, color in color_counts}
+        self.assertTrue(colors.issubset(set(SPECTRA6_PALETTE)))
+        self.assertGreater(len(colors), 1)
 
 
 class ResponseParsingTests(unittest.TestCase):

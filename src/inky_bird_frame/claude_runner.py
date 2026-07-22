@@ -33,13 +33,19 @@ from .codex_runner import (
 from .errors import GenerationError, MissingDependencyError
 from .images import PORTRAIT_SIZE
 from .models import QualityReview, ReferencePhoto, SpeciesProfileData
-from .prompts import profile_prompt, reference_list, review_prompt
+from .prompts import profile_prompt, reference_list
 
 if TYPE_CHECKING:
     from PIL import Image
 
 ANTHROPIC_MODEL: Final = "claude-opus-4-8"
-GEMINI_IMAGE_MODEL: Final = "gemini-2.5-flash-image"
+# Nano Banana Pro. The base gemini-2.5-flash-image model tops out around 1K,
+# which would be upscaled ~1.4x to the 1200x1600 canonical plate and soften the
+# fine linework the e-paper panel depends on; the Pro model's 2K output covers
+# the canonical size natively.
+GEMINI_IMAGE_MODEL: Final = "gemini-3-pro-image-preview"
+GEMINI_IMAGE_SIZE: Final = "2K"
+GEMINI_ASPECT_RATIO: Final = "3:4"
 GENERATOR_LABEL: Final = (
     f"Claude API ({ANTHROPIC_MODEL}) research and review / "
     f"Gemini ({GEMINI_IMAGE_MODEL}) illustration with composited labels"
@@ -48,8 +54,21 @@ MAX_OUTPUT_TOKENS: Final = 16000
 MAX_WEB_SEARCHES: Final = 8
 MAX_SERVER_TOOL_CONTINUATIONS: Final = 4
 REFERENCE_MAX_EDGE: Final = 2048
+MAX_PNG_ENCODED_BYTES: Final = 3_500_000
 
-INK_COLOR: Final = (58, 48, 36)
+# The 13.3-inch Inky Impression is an E Ink Spectra 6 panel: six real pigments
+# (black, white, red, yellow, green, blue); every other color is dithered.
+SPECTRA6_PALETTE: Final[tuple[tuple[int, int, int], ...]] = (
+    (0, 0, 0),
+    (255, 255, 255),
+    (255, 0, 0),
+    (255, 255, 0),
+    (0, 255, 0),
+    (0, 0, 255),
+)
+# Pure black is a native panel pigment and renders crisply; a warm brown ink
+# would dither into black/red/yellow speckle around letterforms.
+INK_COLOR: Final = (0, 0, 0)
 _FONT_CANDIDATES: Final[tuple[str, ...]] = (
     "/System/Library/Fonts/Supplemental/Georgia.ttf",
     "/System/Library/Fonts/Supplemental/Times New Roman.ttf",
@@ -100,6 +119,8 @@ background, pose, crop, or composition.
 Style and composition:
 - Portrait 3:4 page on warm aged cream naturalist-notebook paper.
 - Fine graphite and confident ink linework with restrained transparent watercolor.
+- Bold, crisp, high-contrast lines and flat watercolor washes that survive a six-color e-paper
+  panel; avoid soft gradients, airbrushed shading, and low-contrast detail.
 - One full-body bird, large and centered-right, in a natural perched posture.
 - Bottom margin contains a small wing-pattern study, a bill/head study, and unlabeled color
   swatches.
@@ -193,6 +214,64 @@ def composite_plate_labels(image: Image.Image, profile: SpeciesProfileData) -> N
         y += int(body_size * 1.5)
 
 
+def spectra_panel_preview(source_path: Path, destination_path: Path) -> Path:
+    """Quantize a plate to the Spectra 6 palette with Floyd-Steinberg dithering.
+
+    The review pass otherwise only sees the full-color PNG, which can pass while
+    looking washed out after the panel's six-color quantization.
+    """
+    try:
+        from PIL import Image as PILImage
+    except ModuleNotFoundError as exc:
+        raise MissingDependencyError("Pillow is required to build panel previews") from exc
+    flat = [channel for color in SPECTRA6_PALETTE for channel in color]
+    palette_image = PILImage.new("P", (1, 1))
+    palette_image.putpalette(flat + [0] * (768 - len(flat)))
+    with PILImage.open(source_path) as source:
+        preview = (
+            source.convert("RGB")
+            .quantize(palette=palette_image, dither=PILImage.Dither.FLOYDSTEINBERG)
+            .convert("RGB")
+        )
+    destination_path.parent.mkdir(parents=True, exist_ok=True)
+    preview.save(destination_path)
+    return destination_path
+
+
+def review_prompt_with_preview(
+    species: BirdSpecies,
+    profile: SpeciesProfileData,
+    references: list[ReferencePhoto],
+    allowed_domains: tuple[str, ...],
+) -> str:
+    return f"""Review Image 1 as a candidate scientific field-journal plate for
+{species.common_name} ({species.scientific_name}). Image 2 is the same candidate quantized to the
+six-color e-paper palette (black, white, red, yellow, green, blue) used by the framed display;
+judge contrast, wash rendering, and label legibility as displayed on Image 2, and fold that
+e-paper legibility into composition_quality. Images 3 onward are licensed field-reference photos
+of the same species.
+
+Facts proposed by the research pass:
+{json.dumps(profile, indent=2, sort_keys=True)}
+
+Independently verify the species identity, measurements, and field marks against live source pages
+and the attached references. Do not assume the proposed facts are correct. Restrict browsing to
+these domains: {", ".join(allowed_domains)}. Do not rely on search snippets. Inspect the candidate
+for correct plumage, proportions, bill, eye, wings, tail, legs, feet, and species field marks
+against the attached field-reference photos. Compare every visible factual claim to the
+independently verified facts. Confirm that no place name, ZIP code, coordinates, map, or
+local-observation detail appears. Record every concrete issue and return at least two direct HTTPS
+source URLs from distinct configured domains used for verification.
+
+Set passed=true only when all four scores are at least 4, location_free is true, the bird has
+exactly one head, one beak, two wings, two legs, and one tail, and there are no material species or
+text errors. Return only the requested JSON.
+
+Reference provenance:
+{reference_list(references)}
+"""
+
+
 def _reference_image(path: Path) -> Any:
     try:
         from PIL import Image as PILImage
@@ -210,12 +289,23 @@ def _reference_image(path: Path) -> Any:
 def _encoded_reference(path: Path) -> dict[str, Any]:
     image = _reference_image(path)
     buffer = io.BytesIO()
-    image.save(buffer, format="JPEG", quality=90)
+    media_type = "image/jpeg"
+    if path.suffix.lower() == ".png":
+        # Plates and panel previews are PNG; JPEG re-encoding would smear the
+        # linework and dither patterns the review is asked to judge.
+        image.save(buffer, format="PNG")
+        media_type = "image/png"
+        if buffer.tell() > MAX_PNG_ENCODED_BYTES:
+            buffer = io.BytesIO()
+            media_type = "image/jpeg"
+            image.save(buffer, format="JPEG", quality=90)
+    else:
+        image.save(buffer, format="JPEG", quality=90)
     return {
         "type": "image",
         "source": {
             "type": "base64",
-            "media_type": "image/jpeg",
+            "media_type": media_type,
             "data": base64.standard_b64encode(buffer.getvalue()).decode("ascii"),
         },
     }
@@ -388,6 +478,7 @@ class ClaudeRunner:
             raise MissingDependencyError("Pillow is required to prepare generated plates") from exc
         client = self._genai()
         from google.genai import errors as genai_errors  # cached; _genai() guarded the import
+        from google.genai import types as genai_types
 
         prompt = illustration_prompt(species, profile, references, correction_findings)
         contents: list[Any] = [_reference_image(path) for path in reference_paths]
@@ -396,6 +487,13 @@ class ClaudeRunner:
             response = client.models.generate_content(
                 model=GEMINI_IMAGE_MODEL,
                 contents=contents,
+                config=genai_types.GenerateContentConfig(
+                    response_modalities=["TEXT", "IMAGE"],
+                    image_config=genai_types.ImageConfig(
+                        aspect_ratio=GEMINI_ASPECT_RATIO,
+                        image_size=GEMINI_IMAGE_SIZE,
+                    ),
+                ),
             )
         except genai_errors.APIError as exc:
             _write_log(log_path, prompt, f"ERROR: {exc}")
@@ -407,7 +505,9 @@ class ClaudeRunner:
             f"model={GEMINI_IMAGE_MODEL} produced {len(image_bytes)} bytes",
         )
         with PILImage.open(io.BytesIO(image_bytes)) as source:
-            plate = ImageOps.fit(source.convert("RGB"), PORTRAIT_SIZE)
+            # LANCZOS keeps the 2K linework crisp through the downscale; softened
+            # lines dither into fuzz on the panel.
+            plate = ImageOps.fit(source.convert("RGB"), PORTRAIT_SIZE, PILImage.Resampling.LANCZOS)
         composite_plate_labels(plate, profile)
         output_path.parent.mkdir(parents=True, exist_ok=True)
         plate.save(output_path, format="PNG")
@@ -427,10 +527,16 @@ class ClaudeRunner:
         *,
         allowed_domains: tuple[str, ...],
     ) -> QualityReview:
+        # The preview lives beside the review log in the retained runs directory,
+        # never in the candidate directory: approve_candidate copies that tree
+        # into the catalog, whose publisher allowlists species files.
+        preview_path = spectra_panel_preview(
+            plate_path, log_path.with_name(f"{log_path.stem}-panel-preview.png")
+        )
         raw = self._structured(
-            review_prompt(species, profile, references, allowed_domains),
+            review_prompt_with_preview(species, profile, references, allowed_domains),
             REVIEW_SCHEMA,
-            [plate_path, *reference_paths],
+            [plate_path, preview_path, *reference_paths],
             output_path,
             log_path,
             allowed_domains=allowed_domains,
