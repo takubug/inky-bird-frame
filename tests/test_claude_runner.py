@@ -14,7 +14,9 @@ from inky_bird_frame.claude_runner import (
     illustration_prompt,
     review_prompt_with_preview,
     spectra_panel_preview,
+    supported_schema,
 )
+from inky_bird_frame.codex_runner import PROFILE_SCHEMA, REVIEW_SCHEMA
 from inky_bird_frame.errors import GenerationError
 from inky_bird_frame.images import PAPER_COLOR, PORTRAIT_SIZE
 from inky_bird_frame.models import ReferencePhoto, SpeciesProfileData
@@ -149,6 +151,24 @@ class SpectraPreviewTests(unittest.TestCase):
         colors = {color for _, color in color_counts}
         self.assertTrue(colors.issubset(set(SPECTRA6_PALETTE)))
         self.assertGreater(len(colors), 1)
+
+
+class SupportedSchemaTests(unittest.TestCase):
+    def test_strips_numeric_bounds_anthropic_rejects(self) -> None:
+        cleaned = supported_schema(REVIEW_SCHEMA)
+        score = cleaned["properties"]["species_accuracy"]
+        self.assertEqual(score, {"type": "integer"})
+        self.assertNotIn("minimum", str(cleaned))
+        self.assertNotIn("maximum", str(cleaned))
+
+    def test_preserves_structure_and_required(self) -> None:
+        cleaned = supported_schema(REVIEW_SCHEMA)
+        self.assertEqual(cleaned["type"], "object")
+        self.assertEqual(cleaned["required"], REVIEW_SCHEMA["required"])
+        self.assertEqual(cleaned["additionalProperties"], False)
+
+    def test_leaves_constraint_free_schema_unchanged(self) -> None:
+        self.assertEqual(supported_schema(PROFILE_SCHEMA), PROFILE_SCHEMA)
 
 
 class ResponseParsingTests(unittest.TestCase):

@@ -342,6 +342,39 @@ def _write_log(log_path: Path, prompt: str, result: str) -> None:
     log_path.write_text(f"PROMPT:\n{prompt}\n\nRESULT:\n{result}")
 
 
+# Anthropic structured outputs reject JSON-Schema numeric, length, and pattern
+# constraints (a 400). The shared schemas carry e.g. minimum/maximum on the
+# review scores; the parse_* validators re-check those ranges, so stripping the
+# schema-level bound before sending loses no enforcement.
+_UNSUPPORTED_SCHEMA_KEYS: Final = frozenset(
+    {
+        "minimum",
+        "maximum",
+        "exclusiveMinimum",
+        "exclusiveMaximum",
+        "multipleOf",
+        "minLength",
+        "maxLength",
+        "minItems",
+        "maxItems",
+        "pattern",
+    }
+)
+
+
+def supported_schema(node: Any) -> Any:
+    """Return a copy of a JSON schema without constraints Anthropic rejects."""
+    if isinstance(node, dict):
+        return {
+            key: supported_schema(value)
+            for key, value in node.items()
+            if key not in _UNSUPPORTED_SCHEMA_KEYS
+        }
+    if isinstance(node, list):
+        return [supported_schema(item) for item in node]
+    return node
+
+
 class ClaudeRunner:
     generator_label: str = GENERATOR_LABEL
 
@@ -385,11 +418,32 @@ class ClaudeRunner:
         *,
         allowed_domains: tuple[str, ...],
     ) -> object:
+        # Two phases: web search + vision as free-form research, then a
+        # no-tools call that structures those findings against the schema.
+        # Forcing output_config.format on the same request as server-side
+        # web_search is unstable -- the model cannot always reconcile "call
+        # tools" with "emit only JSON" and spirals until it hits max_tokens.
+        research = self._research(prompt, image_paths, log_path, allowed_domains=allowed_domains)
+        return self._structure(prompt, research, schema, output_path, log_path)
+
+    def _research(
+        self,
+        prompt: str,
+        image_paths: list[Path],
+        log_path: Path,
+        *,
+        allowed_domains: tuple[str, ...],
+    ) -> str:
         client = self._anthropic()
         import anthropic  # cached module; _anthropic() guarded the import
 
+        instruction = (
+            f"{prompt}\n\nWork through this now. Use web_search as needed and study the attached "
+            "images. Write your findings as thorough plain-text notes that cover every fact the "
+            "downstream record requires. Do not emit JSON yet; a later step converts your notes."
+        )
         content: list[Any] = [_encoded_reference(path) for path in image_paths]
-        content.append({"type": "text", "text": prompt})
+        content.append({"type": "text", "text": instruction})
         params: dict[str, Any] = {
             "model": ANTHROPIC_MODEL,
             "max_tokens": MAX_OUTPUT_TOKENS,
@@ -402,9 +456,9 @@ class ClaudeRunner:
                     "allowed_domains": list(allowed_domains),
                 }
             ],
-            "output_config": {"format": {"type": "json_schema", "schema": schema}},
         }
         messages: list[Any] = [{"role": "user", "content": content}]
+        research_log = log_path.with_name(f"{log_path.stem}-research{log_path.suffix}")
         try:
             response = client.messages.create(**params, messages=messages)
             for _ in range(MAX_SERVER_TOOL_CONTINUATIONS):
@@ -413,16 +467,63 @@ class ClaudeRunner:
                 messages = [messages[0], {"role": "assistant", "content": response.content}]
                 response = client.messages.create(**params, messages=messages)
         except (anthropic.APIError, anthropic.APIConnectionError) as exc:
-            _write_log(log_path, prompt, f"ERROR: {exc}")
-            raise GenerationError(f"Claude request failed: {exc}; see {log_path}") from exc
+            _write_log(research_log, instruction, f"ERROR: {exc}")
+            raise GenerationError(
+                f"Claude research request failed: {exc}; see {research_log}"
+            ) from (exc)
         text = _final_text(response)
-        _write_log(log_path, prompt, f"{_response_summary(response)}\n\n{text}")
+        _write_log(research_log, instruction, f"{_response_summary(response)}\n\n{text}")
         if response.stop_reason == "refusal":
-            raise GenerationError(f"Claude declined the request; see {log_path}")
+            raise GenerationError(f"Claude declined the research request; see {research_log}")
         if response.stop_reason == "pause_turn":
-            raise GenerationError(f"Claude search did not finish; see {log_path}")
+            raise GenerationError(f"Claude search did not finish; see {research_log}")
+        if not text.strip():
+            raise GenerationError(f"Claude research produced no notes; see {research_log}")
+        return text
+
+    def _structure(
+        self,
+        prompt: str,
+        research: str,
+        schema: dict[str, object],
+        output_path: Path,
+        log_path: Path,
+    ) -> object:
+        client = self._anthropic()
+        import anthropic  # cached module; _anthropic() guarded the import
+
+        # The original prompt carries the authoritative identity (taxon id,
+        # names) and the field requirements; the notes carry the researched
+        # facts. Phase 2 needs both -- notes alone omit anything the prompt
+        # told the model to "keep as supplied."
+        instruction = (
+            f"{prompt}\n\nResearch notes gathered for this task:\n{research}\n\n"
+            "Now return the single JSON object described above, matching the required schema. "
+            "Populate every field from the identity given above and the researched facts; do not "
+            "leave a field blank and do not invent facts absent from both."
+        )
+        params: dict[str, Any] = {
+            "model": ANTHROPIC_MODEL,
+            "max_tokens": MAX_OUTPUT_TOKENS,
+            "output_config": {
+                "format": {"type": "json_schema", "schema": supported_schema(schema)}
+            },
+        }
+        try:
+            response = client.messages.create(
+                **params, messages=[{"role": "user", "content": instruction}]
+            )
+        except (anthropic.APIError, anthropic.APIConnectionError) as exc:
+            _write_log(log_path, instruction, f"ERROR: {exc}")
+            raise GenerationError(
+                f"Claude structuring request failed: {exc}; see {log_path}"
+            ) from (exc)
+        text = _final_text(response)
+        _write_log(log_path, instruction, f"{_response_summary(response)}\n\n{text}")
+        if response.stop_reason == "refusal":
+            raise GenerationError(f"Claude declined to structure the record; see {log_path}")
         if response.stop_reason == "max_tokens":
-            raise GenerationError(f"Claude output was truncated; see {log_path}")
+            raise GenerationError(f"Claude structured output was truncated; see {log_path}")
         try:
             parsed: object = json.loads(text)
         except json.JSONDecodeError as exc:
