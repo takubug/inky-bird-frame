@@ -17,12 +17,14 @@ from inky_bird_frame.birds import (
     ObservationWindow,
 )
 from inky_bird_frame.catalog import CatalogEntry, candidate_directory, write_candidate_manifest
+from inky_bird_frame.claude_runner import ClaudeRunner
 from inky_bird_frame.codex_runner import CodexRunner
 from inky_bird_frame.config import DiscoveryProvider, load_config
 from inky_bird_frame.controller import (
     DiscoveryResult,
     DiscoverySnapshot,
     ProviderStatus,
+    create_generation_runner,
     discover_species,
     enqueue_seed_species,
     exclusive_refresh_lock,
@@ -94,6 +96,35 @@ max_generation_attempts = 3
 controller_url = "http://controller.test:8793"
 state_dir = "display"
 """
+
+
+class GenerationRunnerFactoryTests(unittest.TestCase):
+    def test_codex_backend_builds_codex_runner(self) -> None:
+        with TemporaryDirectory() as temporary:
+            config_path = Path(temporary) / "config.toml"
+            config_path.write_text(CONFIG)
+            config = load_config(config_path)
+
+            runner = create_generation_runner(config, Path(temporary))
+
+        self.assertIsInstance(runner, CodexRunner)
+        self.assertEqual(runner.generator_label, "Codex subscription / built-in gpt-image-2")
+
+    def test_claude_backend_builds_claude_runner_without_codex_executable(self) -> None:
+        with TemporaryDirectory() as temporary:
+            config_path = Path(temporary) / "config.toml"
+            config_path.write_text(
+                CONFIG.replace(
+                    'codex_path = "/usr/bin/false"',
+                    'generation_backend = "claude"',
+                )
+            )
+            config = load_config(config_path)
+
+            runner = create_generation_runner(config, Path(temporary))
+
+        self.assertIsInstance(runner, ClaudeRunner)
+        self.assertIn("claude-opus-4-8", runner.generator_label)
 
 
 class ControllerTests(unittest.TestCase):
@@ -802,6 +833,7 @@ class ControllerTests(unittest.TestCase):
         )
 
         class FakeRunner:
+            generator_label = "fake-runner"
             corrections: list[tuple[str, ...]] = []
             generated_paths: list[Path] = []
             review_paths: list[Path] = []
@@ -1029,6 +1061,8 @@ class ControllerTests(unittest.TestCase):
         }
 
         class FakeRunner:
+            generator_label = "fake-runner"
+
             def __init__(self, _executable: Path, _workspace: Path) -> None:
                 pass
 

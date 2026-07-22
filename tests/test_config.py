@@ -6,7 +6,13 @@ from tempfile import TemporaryDirectory
 from unittest.mock import patch
 
 from inky_bird_frame.birds import ObservationWindow
-from inky_bird_frame.config import DiscoveryProvider, NotificationEvent, RotationMode, load_config
+from inky_bird_frame.config import (
+    DiscoveryProvider,
+    GenerationBackend,
+    NotificationEvent,
+    RotationMode,
+    load_config,
+)
 from inky_bird_frame.errors import ConfigurationError
 
 CONFIG = """
@@ -436,6 +442,45 @@ class ConfigTests(unittest.TestCase):
                 config = load_config(path)
 
         self.assertEqual(config.controller.codex_path, Path("/opt/local/bin/codex"))
+
+    def test_generation_backend_defaults_to_codex(self) -> None:
+        with TemporaryDirectory() as temporary:
+            path = Path(temporary) / "config.toml"
+            path.write_text(CONFIG)
+
+            config = load_config(path)
+
+        self.assertIs(config.controller.generation_backend, GenerationBackend.CODEX)
+
+    def test_generation_backend_accepts_claude_without_codex_path(self) -> None:
+        with TemporaryDirectory() as temporary:
+            path = Path(temporary) / "config.toml"
+            path.write_text(
+                CONFIG.replace(
+                    'codex_path = "/Applications/Codex.app/Contents/Resources/codex"',
+                    'generation_backend = "claude"',
+                )
+            )
+
+            config = load_config(path)
+
+        self.assertIs(config.controller.generation_backend, GenerationBackend.CLAUDE)
+        self.assertEqual(config.controller.codex_path.name, "codex")
+
+    def test_rejects_unknown_generation_backend(self) -> None:
+        with TemporaryDirectory() as temporary:
+            path = Path(temporary) / "config.toml"
+            path.write_text(
+                CONFIG.replace(
+                    'codex_path = "/Applications/Codex.app/Contents/Resources/codex"',
+                    'generation_backend = "dall-e"',
+                )
+            )
+
+            with self.assertRaisesRegex(
+                ConfigurationError, "generation_backend must be one of: codex, claude"
+            ):
+                load_config(path)
 
     def test_resolves_explicit_relative_codex_path_from_config_directory(self) -> None:
         with TemporaryDirectory() as temporary:

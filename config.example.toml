@@ -38,6 +38,11 @@ catalog_dir = "catalog"
 state_dir = "var/controller"
 # Use an absolute path when a service manager does not inherit your shell PATH.
 codex_path = "codex"
+# Generation backend: "codex" (default) shells out to the Codex CLI at codex_path.
+# "claude" uses the Anthropic API for research and review and Gemini for the
+# illustration; it requires ANTHROPIC_API_KEY and GEMINI_API_KEY in the scheduler
+# environment and the project's "claude" extra installed. codex_path is unused then.
+# generation_backend = "codex"
 bind_host = "0.0.0.0"
 port = 8793
 references_per_species = 4

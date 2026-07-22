@@ -95,6 +95,8 @@ REVIEW_SCHEMA: Final[dict[str, object]] = {
 
 
 class CodexRunner:
+    generator_label: str = "Codex subscription / built-in gpt-image-2"
+
     def __init__(self, executable: Path, workspace: Path, timeout_seconds: int = 1200) -> None:
         self.executable = executable
         self.workspace = workspace.resolve()

@@ -29,6 +29,11 @@ class DiscoveryProvider(StrEnum):
     BIRDWEATHER = "birdweather"
 
 
+class GenerationBackend(StrEnum):
+    CODEX = "codex"
+    CLAUDE = "claude"
+
+
 LEGACY_DISCOVERY_SOURCES: dict[str, tuple[DiscoveryProvider, ...]] = {
     "inaturalist": (DiscoveryProvider.INATURALIST,),
     "ebird": (DiscoveryProvider.EBIRD,),
@@ -110,6 +115,7 @@ class ControllerConfig:
     references_per_species: int
     generations_per_cycle: int
     max_generation_attempts: int
+    generation_backend: GenerationBackend = GenerationBackend.CODEX
     max_species_attempts_per_cycle: int = 5
     retry_initial_minutes: int = 30
     retry_max_minutes: int = 1440
@@ -260,6 +266,15 @@ def _number(section: dict[str, object], name: str, *, minimum: float, maximum: f
     if not math.isfinite(parsed) or not minimum <= parsed <= maximum:
         raise ConfigurationError(f"{name} must be between {minimum:g} and {maximum:g}")
     return parsed
+
+
+def _generation_backend(section: dict[str, object]) -> GenerationBackend:
+    value = _optional_string(section, "generation_backend", default=GenerationBackend.CODEX.value)
+    try:
+        return GenerationBackend(value)
+    except ValueError as exc:
+        allowed = ", ".join(item.value for item in GenerationBackend)
+        raise ConfigurationError(f"generation_backend must be one of: {allowed}") from exc
 
 
 def _string_tuple(
@@ -595,11 +610,14 @@ def load_config(path: Path, *, load_secrets: bool = True) -> AppConfig:
             workspace_dir=_path(_string(controller, "workspace_dir"), base_dir),
             catalog_dir=_path(_string(controller, "catalog_dir"), base_dir),
             state_dir=_path(_string(controller, "state_dir"), base_dir),
-            codex_path=_executable_path(_string(controller, "codex_path"), base_dir),
+            codex_path=_executable_path(
+                _optional_string(controller, "codex_path", default="codex"), base_dir
+            ),
             bind_host=_string(controller, "bind_host"),
             port=_integer(controller, "port", maximum=65535),
             references_per_species=_integer(controller, "references_per_species"),
             generations_per_cycle=_integer(controller, "generations_per_cycle"),
+            generation_backend=_generation_backend(controller),
             max_generation_attempts=_optional_integer(
                 controller, "max_generation_attempts", default=3
             ),

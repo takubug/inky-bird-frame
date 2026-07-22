@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from typing import cast
+from typing import Protocol, cast
 
 from .birds import (
     BirdSpecies,
@@ -20,6 +20,7 @@ from .birds import (
     DateRange,
     EbirdSpecies,
     ObservationWindow,
+    TaxonContext,
     fetch_birdweather_species,
     fetch_ebird_observations,
     fetch_inaturalist_birds,
@@ -40,8 +41,9 @@ from .catalog import (
     utc_now,
     write_candidate_manifest,
 )
+from .claude_runner import ClaudeRunner
 from .codex_runner import CodexRunner, parse_species_profile
-from .config import AppConfig, DiscoveryProvider, discovery_source_label
+from .config import AppConfig, DiscoveryProvider, GenerationBackend, discovery_source_label
 from .errors import (
     CatalogError,
     DataSourceError,
@@ -55,7 +57,7 @@ from .errors import (
 from .geo import DiscoveryLocation, resolve_discovery_location
 from .http import write_json_atomic
 from .images import prepare_generated_plate
-from .models import ReferencePhoto, SpeciesProfileData
+from .models import QualityReview, ReferencePhoto, SpeciesProfileData
 from .prompts import PROMPT_VERSION
 from .references import download_references, fetch_reference_candidates
 from .research import ResearchBudget
@@ -700,12 +702,60 @@ def _timestamp() -> str:
     return datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
 
 
+class GenerationRunner(Protocol):
+    """Backend-agnostic interface for profile research, plate generation, and QA."""
+
+    generator_label: str
+
+    def create_profile(
+        self,
+        species: BirdSpecies,
+        context: TaxonContext,
+        references: list[ReferencePhoto],
+        reference_paths: list[Path],
+        output_path: Path,
+        log_path: Path,
+        *,
+        allowed_domains: tuple[str, ...],
+    ) -> SpeciesProfileData: ...
+
+    def generate_plate(
+        self,
+        species: BirdSpecies,
+        profile: SpeciesProfileData,
+        references: list[ReferencePhoto],
+        reference_paths: list[Path],
+        output_path: Path,
+        log_path: Path,
+        correction_findings: tuple[str, ...] = (),
+    ) -> Path: ...
+
+    def review_plate(
+        self,
+        species: BirdSpecies,
+        profile: SpeciesProfileData,
+        references: list[ReferencePhoto],
+        plate_path: Path,
+        reference_paths: list[Path],
+        output_path: Path,
+        log_path: Path,
+        *,
+        allowed_domains: tuple[str, ...],
+    ) -> QualityReview: ...
+
+
+def create_generation_runner(config: AppConfig, workspace: Path) -> GenerationRunner:
+    if config.controller.generation_backend is GenerationBackend.CLAUDE:
+        return ClaudeRunner(workspace)
+    return CodexRunner(config.controller.codex_path, workspace)
+
+
 def load_or_create_profile(
     config: AppConfig,
     species: BirdSpecies,
     references: list[ReferencePhoto],
     reference_paths: list[Path],
-    runner: CodexRunner,
+    runner: GenerationRunner,
     output_path: Path,
     log_path: Path,
 ) -> tuple[SpeciesProfileData, Path]:
@@ -770,7 +820,7 @@ def generate_candidate(
     references = load_or_fetch_references(config, species)
     reference_root = state_dir / "references" / str(species.taxon_id)
     reference_paths = [reference_root / reference.filename for reference in references]
-    runner = CodexRunner(config.controller.codex_path, workspace)
+    runner = create_generation_runner(config, workspace)
     work_parent = state_dir / "work"
     work_parent.mkdir(parents=True, exist_ok=True)
     # The image tool copies its bitmap from inside Codex, so that one output
@@ -837,7 +887,7 @@ def generate_candidate(
                     profile,
                     references,
                     review,
-                    generator="Codex subscription / built-in gpt-image-2",
+                    generator=runner.generator_label,
                     prompt_version=PROMPT_VERSION,
                     attempt=attempt,
                     max_attempts=config.controller.max_generation_attempts,

@@ -253,6 +253,8 @@ def _write_log(log_path: Path, prompt: str, result: str) -> None:
 
 
 class ClaudeRunner:
+    generator_label: str = GENERATOR_LABEL
+
     def __init__(self, workspace: Path, timeout_seconds: int = 1200) -> None:
         self.workspace = workspace.resolve()
         self.timeout_seconds = timeout_seconds
