@@ -51,6 +51,13 @@ GENERATOR_LABEL: Final = (
     f"Gemini ({GEMINI_IMAGE_MODEL}) illustration with composited labels"
 )
 MAX_OUTPUT_TOKENS: Final = 16000
+# Fail fast on the image call. The google-genai default retries rate limits (429)
+# with unbounded exponential backoff, which can wedge a single generation for
+# 15+ minutes; the controller would rather see a prompt error and defer the
+# species. A healthy 2K generation returns in well under a minute.
+GEMINI_REQUEST_TIMEOUT_MS: Final = 150_000
+GEMINI_RETRY_ATTEMPTS: Final = 2
+GEMINI_RETRY_STATUS_CODES: Final = (429, 500, 502, 503, 504)
 # Web-search content accumulating in context is the dominant per-plate cost, so
 # cap each phase tightly. Research verifies a handful of facts, not exhaustive
 # browsing; the review leans on the already-verified profile plus vision, so it
@@ -405,12 +412,22 @@ class ClaudeRunner:
         if self._genai_client is None:
             try:
                 from google import genai
+                from google.genai import types as genai_types
             except ModuleNotFoundError as exc:
                 raise MissingDependencyError(
                     "The google-genai package is required for plate illustration; "
                     "install the claude extra"
                 ) from exc
-            self._genai_client = genai.Client()
+            self._genai_client = genai.Client(
+                http_options=genai_types.HttpOptions(
+                    timeout=GEMINI_REQUEST_TIMEOUT_MS,
+                    retry_options=genai_types.HttpRetryOptions(
+                        attempts=GEMINI_RETRY_ATTEMPTS,
+                        max_delay=15.0,
+                        http_status_codes=list(GEMINI_RETRY_STATUS_CODES),
+                    ),
+                )
+            )
         return self._genai_client
 
     def _structured(

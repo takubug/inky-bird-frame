@@ -3,6 +3,8 @@ from __future__ import annotations
 import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from typing import Any
+from unittest.mock import patch
 
 from inky_bird_frame.birds import BirdSpecies
 from inky_bird_frame.claude_runner import (
@@ -169,6 +171,29 @@ class SupportedSchemaTests(unittest.TestCase):
 
     def test_leaves_constraint_free_schema_unchanged(self) -> None:
         self.assertEqual(supported_schema(PROFILE_SCHEMA), PROFILE_SCHEMA)
+
+
+class GeminiClientTests(unittest.TestCase):
+    def test_client_caps_timeout_and_retries(self) -> None:
+        from inky_bird_frame.claude_runner import (
+            GEMINI_REQUEST_TIMEOUT_MS,
+            GEMINI_RETRY_ATTEMPTS,
+            ClaudeRunner,
+        )
+
+        captured: dict[str, Any] = {}
+
+        def fake_client(**kwargs: Any) -> object:
+            captured.update(kwargs)
+            return object()
+
+        with patch("google.genai.Client", fake_client):
+            ClaudeRunner(Path("."))._genai()
+
+        http_options = captured["http_options"]
+        self.assertEqual(http_options.timeout, GEMINI_REQUEST_TIMEOUT_MS)
+        self.assertEqual(http_options.retry_options.attempts, GEMINI_RETRY_ATTEMPTS)
+        self.assertIn(429, http_options.retry_options.http_status_codes)
 
 
 class ResponseParsingTests(unittest.TestCase):
