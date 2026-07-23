@@ -51,7 +51,12 @@ GENERATOR_LABEL: Final = (
     f"Gemini ({GEMINI_IMAGE_MODEL}) illustration with composited labels"
 )
 MAX_OUTPUT_TOKENS: Final = 16000
-MAX_WEB_SEARCHES: Final = 8
+# Web-search content accumulating in context is the dominant per-plate cost, so
+# cap each phase tightly. Research verifies a handful of facts, not exhaustive
+# browsing; the review leans on the already-verified profile plus vision, so it
+# needs only a light independent spot-check.
+PROFILE_MAX_WEB_SEARCHES: Final = 4
+REVIEW_MAX_WEB_SEARCHES: Final = 2
 MAX_SERVER_TOOL_CONTINUATIONS: Final = 4
 REFERENCE_MAX_EDGE: Final = 2048
 MAX_PNG_ENCODED_BYTES: Final = 3_500_000
@@ -417,13 +422,20 @@ class ClaudeRunner:
         log_path: Path,
         *,
         allowed_domains: tuple[str, ...],
+        max_searches: int,
     ) -> object:
         # Two phases: web search + vision as free-form research, then a
         # no-tools call that structures those findings against the schema.
         # Forcing output_config.format on the same request as server-side
         # web_search is unstable -- the model cannot always reconcile "call
         # tools" with "emit only JSON" and spirals until it hits max_tokens.
-        research = self._research(prompt, image_paths, log_path, allowed_domains=allowed_domains)
+        research = self._research(
+            prompt,
+            image_paths,
+            log_path,
+            allowed_domains=allowed_domains,
+            max_searches=max_searches,
+        )
         return self._structure(prompt, research, schema, output_path, log_path)
 
     def _research(
@@ -433,6 +445,7 @@ class ClaudeRunner:
         log_path: Path,
         *,
         allowed_domains: tuple[str, ...],
+        max_searches: int,
     ) -> str:
         client = self._anthropic()
         import anthropic  # cached module; _anthropic() guarded the import
@@ -452,7 +465,7 @@ class ClaudeRunner:
                 {
                     "type": "web_search_20260209",
                     "name": "web_search",
-                    "max_uses": MAX_WEB_SEARCHES,
+                    "max_uses": max_searches,
                     "allowed_domains": list(allowed_domains),
                 }
             ],
@@ -556,6 +569,7 @@ class ClaudeRunner:
             output_path,
             log_path,
             allowed_domains=allowed_domains,
+            max_searches=PROFILE_MAX_WEB_SEARCHES,
         )
         profile = parse_species_profile(raw, allowed_domains)
         if (
@@ -645,5 +659,6 @@ class ClaudeRunner:
             output_path,
             log_path,
             allowed_domains=allowed_domains,
+            max_searches=REVIEW_MAX_WEB_SEARCHES,
         )
         return _parse_review(raw, allowed_domains)
