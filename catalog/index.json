@@ -69,6 +69,17 @@
       "taxon_id": 11901
     },
     {
+      "approved_at": "2026-07-23T01:44:29+00:00",
+      "common_name": "Black Swan",
+      "display_path": "species/6914-black-swan/display.png",
+      "display_sha256": "0955a19fb511cd63e97e7312ab90ef280021c2db5c1fc75215a0e4ce13ca86ff",
+      "portrait_path": "species/6914-black-swan/portrait.png",
+      "portrait_sha256": "de49e61b2e706fb66d3a86753613cb4e6c13f85ba1fa2bbc4d4f82ff35ada447",
+      "scientific_name": "Cygnus atratus",
+      "slug": "black-swan",
+      "taxon_id": 6914
+    },
+    {
       "approved_at": "2026-07-10T14:16:22+00:00",
       "common_name": "Black-and-white Warbler",
       "display_path": "species/10286-black-and-white-warbler/display.png",

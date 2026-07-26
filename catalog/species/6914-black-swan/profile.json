@@ -1,0 +1,38 @@
+{
+  "behavior": "Primarily herbivorous, feeding on submerged aquatic plants and algae by dabbling and upending with its long neck; occasionally grazes on grasses near water's edge. Highly social outside breeding season, often gathering in large flocks, and nomadic in response to changing water levels and climate. Forms monogamous pair bonds and both sexes assist in nest building, incubation, and cygnet care.",
+  "common_name": "Black Swan",
+  "family": "Anatidae",
+  "field_marks": [
+    "All-black body plumage with curled, shaggy-edged back and wing feathers",
+    "Long, slender, S-curved neck proportionally longer than other swans",
+    "Bright red bill with a pale whitish band near the tip",
+    "Red-orange eyes contrasting with black head",
+    "White flight feathers concealed at rest, flashing prominently in flight or wing-flap displays",
+    "Black legs and webbed feet"
+  ],
+  "habitat": "Large freshwater and brackish wetlands, lakes, swamps, estuaries, and slow-moving rivers with abundant submerged and emergent aquatic vegetation.",
+  "measurements": {
+    "length": "110-142 cm",
+    "weight": "3.7-9 kg",
+    "wingspan": "160-200 cm"
+  },
+  "palette": [
+    "Jet black",
+    "Crimson red",
+    "Snow white",
+    "Soft grey",
+    "Charcoal black"
+  ],
+  "scientific_name": "Cygnus atratus",
+  "sources": [
+    {
+      "title": "Black Swan - Cygnus atratus",
+      "url": "https://en.wikipedia.org/wiki/Cygnus_atratus"
+    },
+    {
+      "title": "Cygnus atratus (Black Swan)",
+      "url": "https://animaldiversity.org/accounts/Cygnus_atratus/"
+    }
+  ],
+  "taxon_id": 6914
+}
