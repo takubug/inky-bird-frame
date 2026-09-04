@@ -98,6 +98,12 @@ class IllustrationPromptTests(unittest.TestCase):
         self.assertIn("six-color e-paper", prompt)
         self.assertIn("avoid soft gradients", prompt)
 
+    def test_prompt_forbids_book_object_framing(self) -> None:
+        prompt = illustration_prompt(_species(), _profile(), [_reference()])
+        self.assertIn("full bleed", prompt)
+        self.assertIn("flatbed scanner", prompt)
+        self.assertIn("no book or notebook", prompt)
+
     def test_generator_label_names_both_models(self) -> None:
         self.assertIn("claude-sonnet-5", GENERATOR_LABEL)
         self.assertIn("gemini-3-pro-image", GENERATOR_LABEL)

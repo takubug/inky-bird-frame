@@ -128,8 +128,16 @@ Treat every attached image as a species-accuracy reference. Synthesize the consi
 proportions, posture, plumage pattern, and colors across them. Do not reproduce any photograph's
 background, pose, crop, or composition.
 {correction}
+Page and background:
+- The warm aged cream watercolour paper fills the entire image edge to edge (full bleed), with a
+  subtle mottled, lightly pebbled paper grain evenly across the whole page.
+- Render the page perfectly flat and straight-on, as if laid on a flatbed scanner. Do NOT depict
+  the page as a physical object: no book or notebook, no binding, spine, or gutter, no visible page
+  edges, corners, curl, fold, or torn edge, no drop shadow, and no desk, table, cloth, or surface
+  behind or around it. The cream paper is the only background.
+
 Style and composition:
-- Portrait 3:4 page on warm aged cream naturalist-notebook paper.
+- Portrait 3:4 layout.
 - Fine graphite and confident ink linework with restrained transparent watercolor.
 - Bold, crisp, high-contrast lines and flat watercolor washes that survive a six-color e-paper
   panel; avoid soft gradients, airbrushed shading, and low-contrast detail.
