@@ -12,7 +12,6 @@ from inky_bird_frame.claude_runner import (
     SPECTRA6_PALETTE,
     _final_text,
     _inline_image_bytes,
-    composite_plate_labels,
     illustration_prompt,
     review_prompt_with_preview,
     spectra_panel_preview,
@@ -20,7 +19,6 @@ from inky_bird_frame.claude_runner import (
 )
 from inky_bird_frame.codex_runner import PROFILE_SCHEMA, REVIEW_SCHEMA
 from inky_bird_frame.errors import GenerationError
-from inky_bird_frame.images import PAPER_COLOR, PORTRAIT_SIZE
 from inky_bird_frame.models import ReferencePhoto, SpeciesProfileData
 
 
@@ -74,13 +72,17 @@ class _Response:
 
 
 class IllustrationPromptTests(unittest.TestCase):
-    def test_prompt_carries_identity_and_forbids_lettering(self) -> None:
+    def test_prompt_carries_identity_and_requires_verbatim_lettering(self) -> None:
         prompt = illustration_prompt(_species(), _profile(), [_reference()])
         self.assertIn('"Test Bird"', prompt)
         self.assertIn('"Avis test"', prompt)
         self.assertIn('"Testidae"', prompt)
+        self.assertIn('"1 in"', prompt)
         self.assertIn("(c) Observer", prompt)
-        self.assertIn("Do not render any letters", prompt)
+        # The image model paints the labels itself, in the upstream house style.
+        self.assertIn("letter for letter", prompt)
+        self.assertIn("thin measurement ruler", prompt)
+        self.assertNotIn("Do not render any letters", prompt)
         self.assertNotIn("Correction required", prompt)
 
     def test_prompt_includes_correction_findings(self) -> None:
@@ -100,44 +102,18 @@ class IllustrationPromptTests(unittest.TestCase):
 
     def test_prompt_forbids_book_object_framing(self) -> None:
         prompt = illustration_prompt(_species(), _profile(), [_reference()])
-        self.assertIn("full bleed", prompt)
-        self.assertIn("flatbed scanner", prompt)
+        self.assertIn("naturalist-notebook paper", prompt)
+        self.assertIn("edge to\n  edge", prompt)
         self.assertIn("no book or notebook", prompt)
 
-    def test_prompt_keeps_artwork_clear_of_the_label_zones(self) -> None:
+    def test_prompt_keeps_lettering_in_the_margins(self) -> None:
         prompt = illustration_prompt(_species(), _profile(), [_reference()])
-        # The bird must not extend into the reserved margins, so composited
-        # labels never sit on top of the illustration.
-        self.assertIn("no text is ever printed on\ntop of an illustration", prompt)
-        self.assertIn("wholly inside the lower-right region", prompt)
+        self.assertIn("never write over the bird", prompt)
+        self.assertIn("Left margin contains compact handwritten", prompt)
 
     def test_generator_label_names_both_models(self) -> None:
         self.assertIn("claude-sonnet-5", GENERATOR_LABEL)
         self.assertIn("gemini-3-pro-image", GENERATOR_LABEL)
-
-
-class FontBundleTests(unittest.TestCase):
-    def test_rock_salt_is_bundled_and_leads_the_candidates(self) -> None:
-        from inky_bird_frame.claude_runner import _BUNDLED_FONT, _FONT_CANDIDATES
-
-        self.assertTrue(_BUNDLED_FONT.is_file(), f"missing bundled font: {_BUNDLED_FONT}")
-        self.assertEqual(_FONT_CANDIDATES[0], str(_BUNDLED_FONT))
-        self.assertEqual(_BUNDLED_FONT.name, "RockSalt.ttf")
-
-
-class CompositeLabelTests(unittest.TestCase):
-    def test_labels_are_drawn_without_resizing(self) -> None:
-        from PIL import Image, ImageChops
-
-        image = Image.new("RGB", PORTRAIT_SIZE, PAPER_COLOR)
-        composite_plate_labels(image, _profile())
-        self.assertEqual(image.size, PORTRAIT_SIZE)
-        blank = Image.new("RGB", PORTRAIT_SIZE, PAPER_COLOR)
-        self.assertIsNotNone(ImageChops.difference(image, blank).getbbox())
-        # Labels must use pure black, a native panel pigment that dithers cleanly.
-        color_counts = image.getcolors(1_000_000)
-        assert color_counts is not None
-        self.assertIn((0, 0, 0), {color for _, color in color_counts})
 
 
 class ReviewPromptTests(unittest.TestCase):
@@ -152,6 +128,12 @@ class ReviewPromptTests(unittest.TestCase):
         self.assertIn("Images 3 onward", prompt)
         self.assertIn("black, white, red, yellow, green, blue", prompt)
         self.assertIn("birds.example, field.example", prompt)
+
+    def test_preview_prompt_requires_transcribing_the_painted_lettering(self) -> None:
+        prompt = review_prompt_with_preview(_species(), _profile(), [_reference()], ("a.example",))
+        self.assertIn("painted by the image model", prompt)
+        self.assertIn("letter for letter", prompt)
+        self.assertIn("score text_accuracy 3 or lower", prompt)
 
 
 class SpectraPreviewTests(unittest.TestCase):

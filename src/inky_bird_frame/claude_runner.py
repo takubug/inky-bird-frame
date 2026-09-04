@@ -5,9 +5,9 @@ same three-method interface. Responsibilities are split by capability:
 
 - ``create_profile`` and ``review_plate`` call the Anthropic API (vision, web
   search restricted to the configured domains, structured JSON output).
-- ``generate_plate`` asks Gemini's image model for a text-free illustration and
-  then composites the factual labels deterministically with Pillow, so lettering
-  accuracy never depends on a diffusion model.
+- ``generate_plate`` asks Gemini's image model to paint the whole plate, labels
+  included, in the upstream field-journal house style; ``review_plate`` then
+  transcribes that lettering with vision and fails any misspelling.
 
 Credentials come from the environment, matching the scheduler's env-file model:
 ``ANTHROPIC_API_KEY`` for research and review, ``GEMINI_API_KEY`` for the
@@ -21,7 +21,7 @@ import base64
 import io
 import json
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Final
+from typing import Any, Final
 
 from .birds import BirdSpecies, TaxonContext
 from .codex_runner import (
@@ -35,9 +35,6 @@ from .images import PORTRAIT_SIZE
 from .models import QualityReview, ReferencePhoto, SpeciesProfileData
 from .prompts import profile_prompt, reference_list
 
-if TYPE_CHECKING:
-    from PIL import Image
-
 ANTHROPIC_MODEL: Final = "claude-sonnet-5"
 # Nano Banana Pro. The base gemini-2.5-flash-image model tops out around 1K,
 # which would be upscaled ~1.4x to the 1200x1600 canonical plate and soften the
@@ -48,7 +45,7 @@ GEMINI_IMAGE_SIZE: Final = "2K"
 GEMINI_ASPECT_RATIO: Final = "3:4"
 GENERATOR_LABEL: Final = (
     f"Claude API ({ANTHROPIC_MODEL}) research and review / "
-    f"Gemini ({GEMINI_IMAGE_MODEL}) illustration with composited labels"
+    f"Gemini ({GEMINI_IMAGE_MODEL}) illustration with painted labels"
 )
 MAX_OUTPUT_TOKENS: Final = 16000
 # Fail fast on the image call. The google-genai default retries rate limits (429)
@@ -78,20 +75,6 @@ SPECTRA6_PALETTE: Final[tuple[tuple[int, int, int], ...]] = (
     (0, 255, 0),
     (0, 0, 255),
 )
-# Pure black is a native panel pigment and renders crisply; a warm brown ink
-# would dither into black/red/yellow speckle around letterforms.
-INK_COLOR: Final = (0, 0, 0)
-# Rock Salt is bundled with the package so the field-journal labels render in a
-# rustic hand across every deployment (Docker controller, Pi, local). It leads
-# the list; the serif fallbacks only apply if the bundled file is somehow absent.
-_BUNDLED_FONT: Final = Path(__file__).resolve().parent / "assets" / "fonts" / "RockSalt.ttf"
-_FONT_CANDIDATES: Final[tuple[str, ...]] = (
-    str(_BUNDLED_FONT),
-    "/System/Library/Fonts/Supplemental/Georgia.ttf",
-    "/System/Library/Fonts/Supplemental/Times New Roman.ttf",
-    "/usr/share/fonts/truetype/dejavu/DejaVuSerif.ttf",
-    "/usr/share/fonts/truetype/liberation/LiberationSerif-Regular.ttf",
-)
 
 
 def illustration_prompt(
@@ -100,6 +83,7 @@ def illustration_prompt(
     references: list[ReferencePhoto],
     correction_findings: tuple[str, ...] = (),
 ) -> str:
+    measurements = profile["measurements"]
     field_marks = "\n".join(f"  - {mark}" for mark in profile["field_marks"])
     palette = ", ".join(profile["palette"])
     correction = ""
@@ -109,8 +93,8 @@ def illustration_prompt(
 Correction required after an independent review of the previous attempt:
 {issues}
 
-Create a new illustration that corrects every visual issue above. Lettering issues are handled
-outside this illustration; never add text to fix them.
+Create a new illustration that corrects every issue above, including any lettering issue, by
+rewriting the exact text. Do not copy or lightly edit the previous attempt.
 """
     return f"""Illustrate one scientific field-journal plate for the species below.
 
@@ -119,7 +103,10 @@ Species identity:
 - Scientific name: "{species.scientific_name}"
 - Family: "{profile["family"]}"
 
-Species-specific guidance for accuracy:
+Species-specific field notes:
+- Length: "{measurements["length"]}"
+- Wingspan: "{measurements["wingspan"]}"
+- Weight: "{measurements["weight"]}"
 - Habitat: {profile["habitat"]}
 - Behavior: {profile["behavior"]}
 - Field marks:
@@ -133,121 +120,35 @@ Treat every attached image as a species-accuracy reference. Synthesize the consi
 proportions, posture, plumage pattern, and colors across them. Do not reproduce any photograph's
 background, pose, crop, or composition.
 {correction}
-Page and background:
-- The warm aged cream watercolour paper fills the entire image edge to edge (full bleed), with a
-  subtle mottled, lightly pebbled paper grain evenly across the whole page.
-- Render the page perfectly flat and straight-on, as if laid on a flatbed scanner. Do NOT depict
-  the page as a physical object: no book or notebook, no binding, spine, or gutter, no visible page
-  edges, corners, curl, fold, or torn edge, no drop shadow, and no desk, table, cloth, or surface
-  behind or around it. The cream paper is the only background.
-- Every element -- the main bird, the margin studies, and the colour swatches -- is painted
-  directly onto this single sheet of paper. Do NOT place the bird or any element on a separate
-  inset card, pasted photo, bordered panel, framed rectangle, aged sub-page, or lighter tile, and
-  cast no shadow beneath the artwork. There is one flat page and nothing rests on top of it.
-
 Style and composition:
-- Portrait 3:4 layout.
+- Portrait 3:4 page on warm aged cream naturalist-notebook paper. The paper fills the image edge to
+  edge and is the only background: render it flat and straight-on, with no book or notebook, no
+  binding, spine, or gutter, no page edges, curl, or drop shadow, and no desk or surface behind it.
+  Paint every element directly onto this one sheet; put nothing on a separate inset card, pasted
+  photo, or bordered panel.
 - Fine graphite and confident ink linework with restrained transparent watercolor.
 - Bold, crisp, high-contrast lines and flat watercolor washes that survive a six-color e-paper
   panel; avoid soft gradients, airbrushed shading, and low-contrast detail.
 - One full-body bird, large and centered-right, in a natural perched posture.
-- Bottom margin contains a small wing-pattern study, a bill/head study, and unlabeled color
+- Left margin contains compact handwritten measurements and field marks in a fine, neat
+  naturalist's hand.
+- Bottom margin contains a small wing-pattern study, a bill/head study, and color swatches.
+- Right edge contains a thin measurement ruler.
+- Keep all lettering in the margins on bare paper; never write over the bird, the studies, or the
   swatches.
 - It should look like a carefully scanned scientific field-journal page, not Audubon, not a
   decorative poster, not a collage, and not photorealistic.
+- Quiet margins. No scenery, map, location, coordinates, date, logo, or watermark.
 - Exactly one bird, one head, one beak, two wings, two legs, and one tail. Feet must be plausible.
-- No scenery, map, logo, or watermark.
 
-Typography is composited separately by software. Do not render any letters, numerals, words,
-labels, captions, rulers, or handwriting anywhere on the page.
-
-Reserve empty paper for the labels, and keep the artwork clear of it so no text is ever printed on
-top of an illustration:
-- The left third of the page (full height) and the top margin band (roughly the top eighth of the
-  page) must stay quiet, blank cream paper -- no bird, no feathers, no wing or bill studies, no
-  colour swatches, no wash, no stray marks reaching into these zones.
-- Keep the bird, the margin studies, and the swatches wholly inside the lower-right region, well
-  clear of those reserved margins, so the labels composited afterward sit on bare paper.
+Lettering:
+- Write the common name, scientific name, and family exactly as given above, letter for letter.
+  Do not abbreviate, paraphrase, or respell the scientific name.
+- Write the length, wingspan, and weight exactly as given, and the field marks as short
+  handwritten notes taken from the list above.
+- Render only the exact species name and the supplied factual notes. Do not invent extra prose,
+  captions, or labels.
 """
-
-
-def _label_font(size: int) -> Any:
-    from PIL import ImageFont
-
-    for candidate in _FONT_CANDIDATES:
-        if Path(candidate).is_file():
-            return ImageFont.truetype(candidate, size)
-    try:
-        return ImageFont.load_default(size)
-    except TypeError:  # Pillow < 10.1 has no sized default font
-        return ImageFont.load_default()
-
-
-def _wrapped_lines(draw: Any, text: str, font: Any, max_width: int) -> list[str]:
-    lines: list[str] = []
-    current = ""
-    for word in text.split():
-        candidate = f"{current} {word}".strip()
-        if current and draw.textlength(candidate, font=font) > max_width:
-            lines.append(current)
-            current = word
-        else:
-            current = candidate
-    if current:
-        lines.append(current)
-    return lines
-
-
-def composite_plate_labels(image: Image.Image, profile: SpeciesProfileData) -> None:
-    """Draw the factual labels onto an illustration, in place.
-
-    The illustration prompt reserves the left third and top margin for these
-    labels, and rendering them from the validated profile keeps every name and
-    measurement spelled exactly as reviewed.
-    """
-    try:
-        from PIL import ImageDraw
-    except ModuleNotFoundError as exc:
-        raise MissingDependencyError("Pillow is required to composite plate labels") from exc
-
-    draw = ImageDraw.Draw(image)
-    width, height = image.size
-    margin = max(width // 20, 24)
-    column_width = width * 3 // 10
-    title_size = max(width // 18, 16)
-    subtitle_size = max(width // 28, 12)
-    body_size = max(width // 44, 10)
-    title_font = _label_font(title_size)
-    subtitle_font = _label_font(subtitle_size)
-    body_font = _label_font(body_size)
-
-    y = margin
-    draw.text((margin, y), profile["common_name"], font=title_font, fill=INK_COLOR)
-    y += int(title_size * 1.25)
-    draw.text((margin, y), profile["scientific_name"], font=subtitle_font, fill=INK_COLOR)
-    y += int(subtitle_size * 1.3)
-    draw.text((margin, y), f"Family {profile['family']}", font=body_font, fill=INK_COLOR)
-    y += int(body_size * 2.4)
-
-    measurements = profile["measurements"]
-    lines = [
-        f"Length: {measurements['length']}",
-        f"Wingspan: {measurements['wingspan']}",
-        f"Weight: {measurements['weight']}",
-        "",
-    ]
-    for mark in profile["field_marks"]:
-        wrapped = _wrapped_lines(draw, mark, body_font, column_width - body_size)
-        if wrapped:
-            lines.append(f"• {wrapped[0]}")
-            lines.extend(f"   {extra}" for extra in wrapped[1:])
-    limit = height - 2 * margin
-    for line in lines:
-        if y > limit:
-            break
-        if line:
-            draw.text((margin, y), line, font=body_font, fill=INK_COLOR)
-        y += int(body_size * 1.5)
 
 
 def spectra_panel_preview(source_path: Path, destination_path: Path) -> Path:
@@ -298,6 +199,13 @@ against the attached field-reference photos. Compare every visible factual claim
 independently verified facts. Confirm that no place name, ZIP code, coordinates, map, or
 local-observation detail appears. Record every concrete issue and return at least two direct HTTPS
 source URLs from distinct configured domains used for verification.
+
+All lettering on the plate was painted by the image model, not typeset by software. Transcribe
+every word on the plate and check it letter for letter against the verified facts: the common
+name, the scientific name (genus and species spelled exactly), the family, the length, wingspan,
+and weight, and each field mark. Any misspelling, dropped or extra letter, invented word,
+garbled or illegible label, or claim absent from the verified data is a material text error:
+score text_accuracy 3 or lower and set passed=false.
 
 Set passed=true only when all four scores are at least 4, location_free is true, the bird has
 exactly one head, one beak, two wings, two legs, and one tail, and there are no material species or
@@ -668,7 +576,6 @@ class ClaudeRunner:
             # LANCZOS keeps the 2K linework crisp through the downscale; softened
             # lines dither into fuzz on the panel.
             plate = ImageOps.fit(source.convert("RGB"), PORTRAIT_SIZE, PILImage.Resampling.LANCZOS)
-        composite_plate_labels(plate, profile)
         output_path.parent.mkdir(parents=True, exist_ok=True)
         plate.save(output_path, format="PNG")
         if not output_path.is_file() or output_path.stat().st_size == 0:

@@ -53,7 +53,7 @@ LABEL org.opencontainers.image.title="Inky Bird Frame Controller" \
       org.opencontainers.image.created="${BUILD_DATE}" \
       org.opencontainers.image.licenses="MIT"
 RUN apt-get update \
-    && apt-get install --yes --no-install-recommends bubblewrap ca-certificates fonts-dejavu-core git \
+    && apt-get install --yes --no-install-recommends bubblewrap ca-certificates git \
     && rm -rf /var/lib/apt/lists/* \
     && bwrap --version \
     && groupadd --gid 10001 inky \
