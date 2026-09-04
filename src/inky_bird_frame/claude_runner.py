@@ -81,7 +81,12 @@ SPECTRA6_PALETTE: Final[tuple[tuple[int, int, int], ...]] = (
 # Pure black is a native panel pigment and renders crisply; a warm brown ink
 # would dither into black/red/yellow speckle around letterforms.
 INK_COLOR: Final = (0, 0, 0)
+# Rock Salt is bundled with the package so the field-journal labels render in a
+# rustic hand across every deployment (Docker controller, Pi, local). It leads
+# the list; the serif fallbacks only apply if the bundled file is somehow absent.
+_BUNDLED_FONT: Final = Path(__file__).resolve().parent / "assets" / "fonts" / "RockSalt.ttf"
 _FONT_CANDIDATES: Final[tuple[str, ...]] = (
+    str(_BUNDLED_FONT),
     "/System/Library/Fonts/Supplemental/Georgia.ttf",
     "/System/Library/Fonts/Supplemental/Times New Roman.ttf",
     "/usr/share/fonts/truetype/dejavu/DejaVuSerif.ttf",
@@ -135,6 +140,10 @@ Page and background:
   the page as a physical object: no book or notebook, no binding, spine, or gutter, no visible page
   edges, corners, curl, fold, or torn edge, no drop shadow, and no desk, table, cloth, or surface
   behind or around it. The cream paper is the only background.
+- Every element -- the main bird, the margin studies, and the colour swatches -- is painted
+  directly onto this single sheet of paper. Do NOT place the bird or any element on a separate
+  inset card, pasted photo, bordered panel, framed rectangle, aged sub-page, or lighter tile, and
+  cast no shadow beneath the artwork. There is one flat page and nothing rests on top of it.
 
 Style and composition:
 - Portrait 3:4 layout.
@@ -150,8 +159,15 @@ Style and composition:
 - No scenery, map, logo, or watermark.
 
 Typography is composited separately by software. Do not render any letters, numerals, words,
-labels, captions, rulers, or handwriting anywhere on the page. Keep the left third of the page and
-the top margin as quiet, empty paper so the labels can be placed there afterward.
+labels, captions, rulers, or handwriting anywhere on the page.
+
+Reserve empty paper for the labels, and keep the artwork clear of it so no text is ever printed on
+top of an illustration:
+- The left third of the page (full height) and the top margin band (roughly the top eighth of the
+  page) must stay quiet, blank cream paper -- no bird, no feathers, no wing or bill studies, no
+  colour swatches, no wash, no stray marks reaching into these zones.
+- Keep the bird, the margin studies, and the swatches wholly inside the lower-right region, well
+  clear of those reserved margins, so the labels composited afterward sit on bare paper.
 """
 
 

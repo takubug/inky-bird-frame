@@ -104,9 +104,25 @@ class IllustrationPromptTests(unittest.TestCase):
         self.assertIn("flatbed scanner", prompt)
         self.assertIn("no book or notebook", prompt)
 
+    def test_prompt_keeps_artwork_clear_of_the_label_zones(self) -> None:
+        prompt = illustration_prompt(_species(), _profile(), [_reference()])
+        # The bird must not extend into the reserved margins, so composited
+        # labels never sit on top of the illustration.
+        self.assertIn("no text is ever printed on\ntop of an illustration", prompt)
+        self.assertIn("wholly inside the lower-right region", prompt)
+
     def test_generator_label_names_both_models(self) -> None:
         self.assertIn("claude-sonnet-5", GENERATOR_LABEL)
         self.assertIn("gemini-3-pro-image", GENERATOR_LABEL)
+
+
+class FontBundleTests(unittest.TestCase):
+    def test_rock_salt_is_bundled_and_leads_the_candidates(self) -> None:
+        from inky_bird_frame.claude_runner import _BUNDLED_FONT, _FONT_CANDIDATES
+
+        self.assertTrue(_BUNDLED_FONT.is_file(), f"missing bundled font: {_BUNDLED_FONT}")
+        self.assertEqual(_FONT_CANDIDATES[0], str(_BUNDLED_FONT))
+        self.assertEqual(_BUNDLED_FONT.name, "RockSalt.ttf")
 
 
 class CompositeLabelTests(unittest.TestCase):
