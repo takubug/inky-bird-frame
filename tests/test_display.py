@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import unittest
+from collections.abc import Callable
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from types import SimpleNamespace
@@ -8,7 +9,7 @@ from unittest.mock import patch
 
 from PIL import Image
 
-from inky_bird_frame.display import detect_inky_display, show_on_inky
+from inky_bird_frame.display import detect_inky_display, show_on_inky, wait_for_panel_idle
 from inky_bird_frame.images import HARDWARE_SIZE, PAPER_COLOR
 
 
@@ -84,3 +85,28 @@ class DisplayTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class PanelSettleTests(unittest.TestCase):
+    def _fake_time(self) -> tuple[list[float], Callable[[float], None], Callable[[], float]]:
+        now = [0.0]
+        return now, (lambda s: now.__setitem__(0, now[0] + s)), (lambda: now[0])
+
+    def test_waits_until_the_busy_line_clears(self) -> None:
+        states = iter([True, True, True, False])
+        now, sleep, clock = self._fake_time()
+        waited = wait_for_panel_idle(
+            object(), timeout=60, is_busy=lambda: next(states), sleep=sleep, clock=clock
+        )
+        self.assertAlmostEqual(waited, 1.5)
+
+    def test_warns_and_stops_at_the_cap_when_busy_never_clears(self) -> None:
+        now, sleep, clock = self._fake_time()
+        with self.assertWarnsRegex(UserWarning, "still busy after 3s"):
+            waited = wait_for_panel_idle(
+                object(), timeout=3, is_busy=lambda: True, sleep=sleep, clock=clock
+            )
+        self.assertGreaterEqual(waited, 3)
+
+    def test_returns_immediately_without_a_busy_line(self) -> None:
+        self.assertEqual(wait_for_panel_idle(FakeDisplay(1600, 1200)), 0.0)
