@@ -130,10 +130,14 @@ Style and composition:
 - Bold, crisp, high-contrast lines and flat watercolor washes that survive a six-color e-paper
   panel; avoid soft gradients, airbrushed shading, and low-contrast detail.
 - One full-body bird, large and centered-right, in a natural perched posture.
-- Left margin contains compact handwritten measurements and field marks in a fine, neat
-  naturalist's hand.
+- Left margin contains compact handwritten measurements and field marks in a fine naturalist's
+  pen hand: thin ink strokes, slightly italic, with the natural unevenness of quick dip-pen
+  writing. Not rounded marker or comic-style lettering, not uniform typeset-looking letters, and
+  not block capitals.
 - Bottom margin contains a small wing-pattern study, a bill/head study, and color swatches.
-- Right edge contains a thin measurement ruler.
+- Right edge carries a faint hand-drawn pencil scale: one thin line with small tick marks and tiny
+  numerals hugging the very edge of the page. Not a printed plastic or wooden ruler: no thick bar,
+  no coloured band, no shading, and no second inch scale.
 - Keep all lettering in the margins on bare paper; never write over the bird, the studies, or the
   swatches.
 - It should look like a carefully scanned scientific field-journal page, not Audubon, not a
@@ -206,6 +210,14 @@ name, the scientific name (genus and species spelled exactly), the family, the l
 and weight, and each field mark. Any misspelling, dropped or extra letter, invented word,
 garbled or illegible label, or claim absent from the verified data is a material text error:
 score text_accuracy 3 or lower and set passed=false.
+
+House style is part of composition_quality. Every plate must be one flat, full-bleed sheet of
+cream paper with all lettering in a fine naturalist's pen hand (thin, slightly italic ink
+strokes) and a faint, thin, hand-drawn pencil scale along the right edge. Score
+composition_quality 3 or lower and set passed=false if any of these appear: a visible notebook
+binding, spiral, spine, or gutter; a torn, curled, or aged page edge; the bird or any study
+placed inside a drawn border, inset panel, or pasted card; rounded marker, comic-style, or
+typeset-looking lettering; or a thick, coloured, shaded, or printed-looking ruler.
 
 Set passed=true only when all four scores are at least 4, location_free is true, the bird has
 exactly one head, one beak, two wings, two legs, and one tail, and there are no material species or

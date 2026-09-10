@@ -81,7 +81,7 @@ class IllustrationPromptTests(unittest.TestCase):
         self.assertIn("(c) Observer", prompt)
         # The image model paints the labels itself, in the upstream house style.
         self.assertIn("letter for letter", prompt)
-        self.assertIn("thin measurement ruler", prompt)
+        self.assertIn("hand-drawn pencil scale", prompt)
         self.assertNotIn("Do not render any letters", prompt)
         self.assertNotIn("Correction required", prompt)
 
@@ -111,6 +111,14 @@ class IllustrationPromptTests(unittest.TestCase):
         self.assertIn("never write over the bird", prompt)
         self.assertIn("Left margin contains compact handwritten", prompt)
 
+    def test_prompt_forbids_the_known_style_drifts(self) -> None:
+        prompt = illustration_prompt(_species(), _profile(), [_reference()])
+        # A printed school ruler and rounded comic lettering slipped through once;
+        # both are now named explicitly.
+        self.assertIn("Not a printed plastic or wooden ruler", prompt)
+        self.assertIn("not block capitals", prompt)
+        self.assertIn("Not rounded marker or comic-style lettering", prompt)
+
     def test_generator_label_names_both_models(self) -> None:
         self.assertIn("claude-sonnet-5", GENERATOR_LABEL)
         self.assertIn("gemini-3-pro-image", GENERATOR_LABEL)
@@ -134,6 +142,13 @@ class ReviewPromptTests(unittest.TestCase):
         self.assertIn("painted by the image model", prompt)
         self.assertIn("letter for letter", prompt)
         self.assertIn("score text_accuracy 3 or lower", prompt)
+
+    def test_preview_prompt_polices_the_house_style(self) -> None:
+        prompt = review_prompt_with_preview(_species(), _profile(), [_reference()], ("a.example",))
+        self.assertIn("House style is part of composition_quality", prompt)
+        self.assertIn("printed-looking ruler", prompt)
+        self.assertIn("spiral, spine, or gutter", prompt)
+        self.assertIn("inset panel", prompt)
 
 
 class SpectraPreviewTests(unittest.TestCase):
