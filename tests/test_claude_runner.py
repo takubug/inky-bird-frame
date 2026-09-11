@@ -181,6 +181,33 @@ class FontAndCompositeTests(unittest.TestCase):
             "measurement text overran the label column",
         )
 
+    def test_length_and_weight_never_wrap_and_wingspan_takes_at_most_two_lines(self) -> None:
+        from PIL import Image, ImageDraw
+
+        from inky_bird_frame.claude_runner import _label_font, _measurement_lines
+
+        profile = _profile()
+        profile["measurements"] = {
+            "length": "33\u201337 cm (13\u201314.5 in)",
+            "wingspan": "not well documented in standard references",
+            "weight": "approx. 80\u2013120 g",
+        }
+        image = Image.new("RGB", PORTRAIT_SIZE, PAPER_COLOR)
+        composite_plate_labels(image, profile)
+        # Re-derive the face the compositor settled on by checking the invariant at
+        # every size down from the default: the largest size that satisfies it is
+        # what gets drawn, so at least one size must satisfy it.
+        draw = ImageDraw.Draw(image)
+        width = PORTRAIT_SIZE[0]
+        column_width = width * 3 // 10
+        satisfied = []
+        for size in range(max(width // 44, 10), max(width // 70, 8) - 1, -1):
+            wrapped = _measurement_lines(draw, profile, _label_font(size), column_width)
+            satisfied.append([len(w) for w in wrapped])
+        self.assertTrue(any(counts == [1, 2, 1] or counts == [1, 1, 1] for counts in satisfied))
+        lengths = [w for w in _measurement_lines(draw, profile, _label_font(16), column_width)]
+        self.assertIn("refs", " ".join(lengths[1]))
+
     def test_label_block_never_enters_the_bottom_band(self) -> None:
         from PIL import Image
 

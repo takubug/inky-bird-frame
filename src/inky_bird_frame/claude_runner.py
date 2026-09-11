@@ -238,7 +238,9 @@ def composite_plate_labels(image: Any, profile: SpeciesProfileData) -> None:
         )
         lines = _label_lines(draw, profile, body_font, body_size, column_width)
         block_bottom = block_top + len(lines) * int(body_size * 1.5)
-        if block_bottom <= label_floor or body_size <= minimum_body:
+        fits_floor = block_bottom <= label_floor
+        fits_lines = _measurements_fit(draw, profile, body_font, column_width)
+        if (fits_floor and fits_lines) or body_size <= minimum_body:
             break
         body_size -= 1
     # At the minimum face, drop trailing lines rather than cross into the band.
@@ -260,21 +262,62 @@ def composite_plate_labels(image: Any, profile: SpeciesProfileData) -> None:
         y += int(body_size * 1.5)
 
 
+# Measurement qualifiers are abbreviated so they read as tidy field notes rather
+# than wrapping into orphaned fragments ("...in)" alone on a line).
+_MEASUREMENT_ABBREVIATIONS: Final[tuple[tuple[str, str], ...]] = (
+    ("standard references", "standard refs"),
+    ("references", "refs"),
+    ("approximately", "approx."),
+    ("approximate", "approx."),
+)
+
+
+def _measurement_specs(profile: SpeciesProfileData) -> list[tuple[str, str, int]]:
+    """(label, value, maximum lines): length and weight sit on one line, wingspan may take two."""
+    measurements = profile["measurements"]
+    return [
+        ("Length", measurements["length"], 1),
+        ("Wingspan", measurements["wingspan"], 2),
+        ("Weight", measurements["weight"], 1),
+    ]
+
+
+def _measurement_text(label: str, value: str) -> str:
+    for long, short in _MEASUREMENT_ABBREVIATIONS:
+        value = value.replace(long, short)
+    return f"{label}: {value}"
+
+
+def _measurement_lines(
+    draw: Any, profile: SpeciesProfileData, body_font: Any, column_width: int
+) -> list[list[str]]:
+    return [
+        _wrapped_lines(draw, _measurement_text(label, value), body_font, column_width)
+        for label, value, _ in _measurement_specs(profile)
+    ]
+
+
+def _measurements_fit(
+    draw: Any, profile: SpeciesProfileData, body_font: Any, column_width: int
+) -> bool:
+    """True when every measurement respects its line limit at this face size."""
+    return all(
+        len(wrapped) <= limit
+        for wrapped, (_, _, limit) in zip(
+            _measurement_lines(draw, profile, body_font, column_width),
+            _measurement_specs(profile),
+            strict=True,
+        )
+    )
+
+
 def _label_lines(
     draw: Any, profile: SpeciesProfileData, body_font: Any, body_size: int, column_width: int
 ) -> list[str]:
     """Wrap the measurements and field marks into the label column."""
-    measurements = profile["measurements"]
     lines: list[str] = []
-    for label, value in (
-        ("Length", measurements["length"]),
-        ("Wingspan", measurements["wingspan"]),
-        ("Weight", measurements["weight"]),
-    ):
-        # Long qualifiers ("not well documented in standard references") must wrap
-        # inside the label column, never run across the bird.
-        wrapped = _wrapped_lines(draw, f"{label}: {value}", body_font, column_width)
-        lines.append(wrapped[0] if wrapped else f"{label}:")
+    for wrapped in _measurement_lines(draw, profile, body_font, column_width):
+        lines.append(wrapped[0] if wrapped else "")
         lines.extend(f"   {extra}" for extra in wrapped[1:])
     lines.append("")
     for mark in profile["field_marks"]:
