@@ -192,16 +192,21 @@ paper runs continuously and unmarked across the whole sheet.
 # paper a few pixels to either side. Bird outlines and hatching are broader,
 # shorter, or flanked by more ink, so they do not reach the threshold.
 PAGE_LINE_MIN_SPAN: Final = 0.40
+# Shorter rules (an underline beneath the studies, a divider between two of them)
+# are erased too, but only a page-spanning one fails the attempt outright.
+PAGE_LINE_ERASE_SPAN: Final = 0.30
 PAGE_LINE_INK_DEPTH: Final = 4
 PAGE_LINE_CLEARANCE: Final = 5
-PAGE_LINE_EDGE: Final = 6
+PAGE_LINE_EDGE: Final = 16
 # Only ink that continues this far along the line is erased, so a hatching stroke
 # or letter crossing the rule's band is left alone.
 PAGE_LINE_MIN_RUN: Final = 40
 PAGE_LINE_ERASE_PASSES: Final = 3
 
 
-def _page_line_scan(image: Any) -> tuple[dict[str, Any], list[tuple[str, int, int, float]]]:
+def _page_line_scan(
+    image: Any, min_span: float = PAGE_LINE_MIN_SPAN
+) -> tuple[dict[str, Any], list[tuple[str, int, int, float]]]:
     """Return the thin-ink masks and every long straight run as (axis, start, end, span)."""
     from PIL import Image as PILImage
     from PIL import ImageChops, ImageFilter
@@ -220,7 +225,9 @@ def _page_line_scan(image: Any) -> tuple[dict[str, Any], list[tuple[str, int, in
         ("horizontal", (0, PAGE_LINE_CLEARANCE)),
     ):
         flank = ImageChops.lighter(ImageChops.offset(ink, dx, dy), ImageChops.offset(ink, -dx, -dy))
-        thin = ImageChops.subtract(band, flank)
+        # Keep only ink that continues along the axis, so a dotted paper grain or a
+        # column of short strokes never adds up to a "line".
+        thin = _along_axis_runs(ImageChops.subtract(band, flank), axis == "vertical")
         thin_masks[axis] = thin
         if axis == "vertical":
             profile_image = thin.resize((width, 1), PILImage.Resampling.BOX)
@@ -234,8 +241,7 @@ def _page_line_scan(image: Any) -> tuple[dict[str, Any], list[tuple[str, int, in
         hits = [
             index
             for index, value in enumerate(spans)
-            if value >= PAGE_LINE_MIN_SPAN * 255
-            and PAGE_LINE_EDGE <= index < extent - PAGE_LINE_EDGE
+            if value >= min_span * 255 and PAGE_LINE_EDGE <= index < extent - PAGE_LINE_EDGE
         ]
         for start, end in _runs(hits):
             span = max(spans[index] for index in range(start, end + 1)) / 255
@@ -276,7 +282,7 @@ def erase_page_lines(image: Any) -> tuple[str, ...]:
     width, height = image.size
     erased: list[str] = []
     for _ in range(PAGE_LINE_ERASE_PASSES):
-        thin_masks, runs = _page_line_scan(image)
+        thin_masks, runs = _page_line_scan(image, PAGE_LINE_ERASE_SPAN)
         if not runs:
             break
         for axis, start, end, span in runs:
@@ -292,7 +298,7 @@ def erase_page_lines(image: Any) -> tuple[str, ...]:
                 else (0, max(start - 2, 0), width, min(end + 3, height))
             )
             window.paste(255, box)
-            mask = _along_axis_runs(ImageChops.multiply(thin_masks[axis], window), vertical)
+            mask = ImageChops.multiply(thin_masks[axis], window)
             image.paste(fill, (0, 0), mask)
             erased.append(_describe_line(image, axis, start, end, span))
     return tuple(erased)
@@ -446,19 +452,15 @@ def composite_plate_labels(image: Any, profile: SpeciesProfileData) -> None:
         block_top = (
             margin + int(title_size * 1.25) + int(subtitle_size * 1.3) + int(body_size * 2.4)
         )
-        lines = _label_lines(draw, profile, body_font, body_size, column_width)
-        block_bottom = block_top + len(lines) * int(body_size * 1.5)
-        fits_floor = block_bottom <= label_floor
+        placed, complete = _flow_lines(
+            draw, profile, body_font, body_size, free, column_width, block_top, label_floor
+        )
         fits_lines = _measurements_fit(draw, profile, body_font, column_width)
-        if fits_floor and (fits_lines or body_size <= consistent_body):
+        if complete and (fits_lines or body_size <= consistent_body):
             break
         if body_size <= minimum_body:
-            break
+            break  # at the minimum face, trailing lines are dropped rather than the band crossed
         body_size -= 1
-    # At the minimum face, drop trailing lines rather than cross into the band.
-    line_height = int(body_size * 1.5)
-    room = max((label_floor - block_top) // line_height, 0)
-    lines = lines[:room]
 
     y = margin
     draw.text((margin, y), profile["common_name"], font=title_font, fill=INK_COLOR)
@@ -466,32 +468,66 @@ def composite_plate_labels(image: Any, profile: SpeciesProfileData) -> None:
     draw.text((margin, y), profile["scientific_name"], font=subtitle_font, fill=INK_COLOR)
     y += int(subtitle_size * 1.3)
     draw.text((margin, y), f"Family {profile['family']}", font=body_font, fill=INK_COLOR)
-    y += int(body_size * 2.4)
+    for line_y, line in placed:
+        draw.text((margin, line_y), line, font=body_font, fill=INK_COLOR)
 
-    # Flow the body text around the illustration: each item is wrapped to the
-    # width actually free of ink where it will sit, so a tail or wing sweeping
-    # into the column narrows the lines there instead of being written over.
+
+def _flow_lines(
+    draw: Any,
+    profile: SpeciesProfileData,
+    body_font: Any,
+    body_size: int,
+    free: list[int],
+    column_width: int,
+    start_y: int,
+    floor: int,
+) -> tuple[list[tuple[int, str]], bool]:
+    """Lay the body text out around the illustration; (placed (y, line) pairs, all placed?).
+
+    Each line is filled with as many words as fit in the width actually free of
+    ink at its own height, so a tail or wing sweeping into the column narrows
+    the lines there instead of being written over, and an item is never cut
+    short: its remaining words simply continue on the next line.
+    """
+    line_height = int(body_size * 1.5)
     narrowest = max(column_width * 2 // 5, body_size * 4)
+    placed: list[tuple[int, str]] = []
+    y = start_y
+
+    def free_here(height: int) -> int:
+        # Glyph descenders reach below the line box, so include half a line of slack.
+        return max(
+            _free_width(free, height, height + line_height * 3 // 2, column_width), narrowest
+        )
+
     for kind, label, value, limit in _label_items(profile):
-        band_width = max(_free_width(free, y, y + line_height * 4, column_width), narrowest)
         if kind == "measurement":
-            wrapped = _fitted_measurement(draw, label, value, limit, body_font, band_width)
-        else:
-            marks = _wrapped_lines(draw, value, body_font, band_width - body_size)
-            wrapped = (
-                [f"\u2022 {marks[0]}"] + [f"   {extra}" for extra in marks[1:]] if marks else []
-            )
-        for line in wrapped:
-            if y + line_height > label_floor:
-                return
-            # Glyph descenders reach below the line box, so include half a line of slack.
-            here = max(_free_width(free, y, y + line_height * 3 // 2, column_width), narrowest)
-            if draw.textlength(line, font=body_font) > here:
-                break  # a deeper intrusion than the item was wrapped for: stop this item
-            draw.text((margin, y), line, font=body_font, fill=INK_COLOR)
+            band_width = max(_free_width(free, y, y + line_height * 4, column_width), narrowest)
+            for line in _fitted_measurement(draw, label, value, limit, body_font, band_width):
+                if y + line_height > floor:
+                    return placed, False
+                placed.append((y, line))
+                y += line_height
+            if label == "Weight":
+                y += line_height  # gap between the measurements and the field marks
+            continue
+        remaining = value.split()
+        first = True
+        while remaining:
+            if y + line_height > floor:
+                return placed, False
+            room = free_here(y) - body_size
+            words = [remaining.pop(0)]
+            while remaining:
+                candidate = " ".join([*words, remaining[0]])
+                if draw.textlength(candidate, font=body_font) > room:
+                    break
+                words.append(remaining.pop(0))
+            prefix = "\u2022 " if first else "   "
+            placed.append((y, prefix + " ".join(words)))
             y += line_height
-        if kind == "measurement" and label == "Weight":
-            y += line_height  # gap between the measurements and the field marks
+            first = False
+    return placed, True
 
 
 # Measurement qualifiers are abbreviated so they read as tidy field notes rather

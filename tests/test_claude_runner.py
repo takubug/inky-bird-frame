@@ -282,6 +282,50 @@ class FontAndCompositeTests(unittest.TestCase):
         self.assertEqual(page.getpixel((300, 600)), (0, 0, 0))  # crossing stroke kept
         self.assertEqual(erase_page_lines(page), ())  # idempotent
 
+    def test_a_dotted_column_is_not_a_line_but_a_short_underline_is_erased(self) -> None:
+        from PIL import Image, ImageDraw
+
+        from inky_bird_frame.claude_runner import drawn_page_lines, erase_page_lines
+
+        page = Image.new("RGB", PORTRAIT_SIZE, PAPER_COLOR)
+        draw = ImageDraw.Draw(page)
+        for y in range(0, 1600, 12):  # a dotted paper grain aligned in one column
+            draw.point((400, y), fill=(120, 110, 90))
+        draw.line([(600, 1450), (1000, 1450)], fill=(150, 140, 120), width=1)  # 33% underline
+        self.assertEqual(drawn_page_lines(page), ())  # neither spans 40% as a real line
+        erased = erase_page_lines(page)
+        self.assertEqual(len(erased), 1, erased)
+        self.assertRegex(erased[0], r"horizontal line runs across 3[0-9]%")
+        self.assertEqual(page.getpixel((800, 1450)), PAPER_COLOR)
+        self.assertEqual(page.getpixel((400, 600)), (120, 110, 90))  # grain left alone
+
+    def test_flowed_field_marks_continue_past_an_intrusion_instead_of_stopping(self) -> None:
+        from PIL import Image, ImageDraw
+
+        from inky_bird_frame.claude_runner import _flow_lines, _label_font
+
+        profile = _profile()
+        draw = ImageDraw.Draw(Image.new("RGB", PORTRAIT_SIZE, PAPER_COLOR))
+        width, height = PORTRAIT_SIZE
+        column_width = width * 3 // 10
+        free = [column_width] * height
+        for y in range(500, 700):  # a tail sweeping deep into the column
+            free[y] = column_width * 2 // 5
+        body_size = max(width // 44, 10)
+        placed, complete = _flow_lines(
+            draw, profile, _label_font(body_size), body_size, free, column_width, 300, height
+        )
+        self.assertTrue(complete)
+        text = " ".join(line.strip("\u2022 ") for _, line in placed)
+        for mark in profile["field_marks"]:
+            self.assertIn(mark, text)  # every word of every mark is on the page, in order
+        narrow = [line for y, line in placed if 500 <= y < 700]
+        self.assertTrue(narrow)
+        for line in narrow:
+            self.assertLessEqual(
+                draw.textlength(line, font=_label_font(body_size)), column_width * 2 // 5
+            )
+
     def test_a_parenthetical_is_never_split_across_lines(self) -> None:
         from PIL import Image, ImageDraw
 
