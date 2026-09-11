@@ -200,6 +200,13 @@ class FontAndCompositeTests(unittest.TestCase):
         # At a face where the inches fit on one line they are kept.
         small = _measurement_lines(draw, profile, _label_font(18), width * 3 // 10)[1]
         self.assertEqual(small, ["Wingspan: 70\u201390 cm (28\u201335 in)"])
+        # At the plate face the parenthetical moves whole to the second line.
+        plate = _measurement_lines(draw, profile, _label_font(24), width * 3 // 10)[1]
+        self.assertEqual(plate, ["Wingspan: 70\u201390 cm", "(28\u201335 in)"])
+        # And no reading is ever cut inside a parenthesis.
+        for size in range(max(width // 44, 10), max(width // 70, 8) - 1, -1):
+            for line in _measurement_lines(draw, profile, _label_font(size), width * 3 // 10)[1]:
+                self.assertEqual(line.count("("), line.count(")"), line)
 
     def test_long_qualifiers_are_trimmed_instead_of_shrinking_the_face(self) -> None:
         from PIL import Image, ImageDraw

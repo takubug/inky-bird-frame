@@ -325,8 +325,10 @@ def _trim_candidates(value: str) -> list[str]:
     words = candidates[-1].split()
     while len(words) > 2:
         words = words[:-1]
-        candidates.append(" ".join(words))
-    return candidates
+        candidate = " ".join(words)
+        if candidate.count("(") == candidate.count(")"):  # never cut inside a parenthetical
+            candidates.append(candidate)
+    return [c for c in candidates if c.count("(") == c.count(")")]
 
 
 def _fitted_measurement(
@@ -341,11 +343,25 @@ def _fitted_measurement(
     best: list[str] | None = None
     best_length = -1
     for candidate in _trim_candidates(value):
-        wrapped = _wrapped_lines(draw, _measurement_text(label, candidate), body_font, column_width)
-        if len(wrapped) > limit or _dangles(wrapped):
-            continue
-        if len(candidate) > best_length:
-            best, best_length = wrapped, len(candidate)
+        text = _measurement_text(label, candidate)
+        plain = _wrapped_lines(draw, text, body_font, column_width)
+        options = [plain]
+        # If the plain wrap would cut a parenthetical, fall back to breaking before
+        # it, so "(28-35 in)" stays whole on the second line.
+        if (len(plain) > limit or _dangles(plain)) and " (" in text and limit >= 2:
+            head, paren = text.split(" (", 1)
+            paren = "(" + paren
+            if (
+                draw.textlength(head, font=body_font) <= column_width
+                and draw.textlength(paren, font=body_font) <= column_width
+            ):
+                options.append([head, paren])
+        for wrapped in options:
+            if len(wrapped) > limit or _dangles(wrapped):
+                continue
+            if len(candidate) > best_length:
+                best, best_length = wrapped, len(candidate)
+            break
     if best is not None:
         return best
     return _wrapped_lines(draw, _measurement_text(label, value), body_font, column_width)
