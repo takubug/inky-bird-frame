@@ -244,7 +244,7 @@ def _free_width(free: list[int], y0: int, y1: int, column_width: int) -> int:
 
 
 def _label_items(profile: SpeciesProfileData) -> list[tuple[str, str, str, int]]:
-    """Body items in plate order: ("measurement", label, value, limit), then ("mark", "", text, 0)."""
+    """Body items in plate order: measurements (label, value, limit), then marks (text)."""
     items: list[tuple[str, str, str, int]] = [
         ("measurement", label, value, limit) for label, value, limit in _measurement_specs(profile)
     ]
@@ -320,7 +320,9 @@ def composite_plate_labels(image: Any, profile: SpeciesProfileData) -> None:
             wrapped = _fitted_measurement(draw, label, value, limit, body_font, band_width)
         else:
             marks = _wrapped_lines(draw, value, body_font, band_width - body_size)
-            wrapped = [f"\u2022 {marks[0]}"] + [f"   {extra}" for extra in marks[1:]] if marks else []
+            wrapped = (
+                [f"\u2022 {marks[0]}"] + [f"   {extra}" for extra in marks[1:]] if marks else []
+            )
         for line in wrapped:
             if y + line_height > label_floor:
                 return
