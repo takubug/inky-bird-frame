@@ -208,6 +208,22 @@ class FontAndCompositeTests(unittest.TestCase):
             for line in _measurement_lines(draw, profile, _label_font(size), width * 3 // 10)[1]:
                 self.assertEqual(line.count("("), line.count(")"), line)
 
+    def test_a_parenthetical_is_never_split_across_lines(self) -> None:
+        from PIL import Image, ImageDraw
+
+        from inky_bird_frame.claude_runner import _label_font, _measurement_lines
+
+        profile = _profile()
+        profile["measurements"]["wingspan"] = "17\u201321 cm (6.7\u20138.3 in) folded wing chord"
+        draw = ImageDraw.Draw(Image.new("RGB", PORTRAIT_SIZE, PAPER_COLOR))
+        width = PORTRAIT_SIZE[0]
+        for size in range(max(width // 44, 10), max(width // 70, 8) - 1, -1):
+            wingspan = _measurement_lines(draw, profile, _label_font(size), width * 3 // 10)[1]
+            for line in wingspan:
+                self.assertEqual(line.count("("), line.count(")"), wingspan)
+        plate = _measurement_lines(draw, profile, _label_font(24), width * 3 // 10)[1]
+        self.assertEqual(plate, ["Wingspan: 17\u201321 cm", "(6.7\u20138.3 in)"])
+
     def test_long_qualifiers_are_trimmed_instead_of_shrinking_the_face(self) -> None:
         from PIL import Image, ImageDraw
 

@@ -387,7 +387,9 @@ def _measurement_text(label: str, value: str) -> str:
 
 
 def _dangles(wrapped: list[str]) -> bool:
-    """True when a multi-line wrap ends in a lone fragment ("in)", "g", "refs")."""
+    """True when a wrap ends in a lone fragment ("in)", "g") or splits a parenthetical."""
+    if any(line.count("(") != line.count(")") for line in wrapped):
+        return True
     if len(wrapped) < 2:
         return False
     last = wrapped[-1].strip()
@@ -398,6 +400,8 @@ def _dangles(wrapped: list[str]) -> bool:
 def _trim_candidates(value: str) -> list[str]:
     """Progressively shorter readings of a measurement value, leading clause first."""
     candidates = [value]
+    if ")" in value and not value.rstrip().endswith(")"):
+        candidates.append(value[: value.rfind(")") + 1].strip())  # drop a trailing free-text note
     for separator in ("; ", " (", ", ", " - ", " \u2013 "):
         head = value.split(separator, 1)[0].strip()
         if head and head != value and head not in candidates:
