@@ -34,6 +34,7 @@ class NotificationItem:
     next_attempt_at: datetime
     delivered_to: tuple[str, ...]
     last_error: str | None = None
+    attachment: str | None = None
 
     def as_dict(self) -> dict[str, object]:
         return {
@@ -46,6 +47,7 @@ class NotificationItem:
             "next_attempt_at": self.next_attempt_at.isoformat(),
             "delivered_to": list(self.delivered_to),
             "last_error": self.last_error,
+            "attachment": self.attachment,
         }
 
 
@@ -120,6 +122,7 @@ def enqueue_notification(
     dedupe_key: str,
     title: str,
     body: str,
+    attachment: str | None = None,
     now: datetime | None = None,
 ) -> bool:
     if not config.notifications.enabled:
@@ -146,6 +149,7 @@ def enqueue_notification(
             attempts=0,
             next_attempt_at=current,
             delivered_to=(),
+            attachment=attachment,
         )
         _write_state(notification_state_path(config), state, pending=(*state.pending, item))
     return True
@@ -237,6 +241,7 @@ def _deliver_notification_state(
             + timedelta(minutes=config.notifications.delivery_retry_minutes),
             delivered_to=tuple(delivered_to),
             last_error="; ".join(errors) if errors else "No configured destination accepts event",
+            attachment=item.attachment,
         )
         if attempts >= config.notifications.max_delivery_attempts:
             dead_letters.append(updated)
@@ -331,6 +336,7 @@ def safe_notify(
     dedupe_key: str,
     title: str,
     body: str,
+    attachment: str | None = None,
 ) -> dict[str, object]:
     try:
         queued = enqueue_notification(
@@ -339,6 +345,7 @@ def safe_notify(
             dedupe_key=dedupe_key,
             title=title,
             body=body,
+            attachment=attachment,
         )
         return {
             "queued": queued,
@@ -599,7 +606,12 @@ def _deliver(destination: NotificationDestination, item: NotificationItem) -> No
     notifier = _new_notifier()
     if not notifier.add(destination.url) or len(notifier) != 1:
         raise ValueError("invalid Apprise service URL")
-    result = notifier.notify(title=item.title, body=item.body)
+    if item.attachment:
+        # Apprise forwards the file to providers that accept uploads (ntfy does),
+        # so a pending plate arrives on the phone as the image itself.
+        result = notifier.notify(title=item.title, body=item.body, attach=item.attachment)
+    else:
+        result = notifier.notify(title=item.title, body=item.body)
     if result is not True:
         raise RuntimeError("provider did not confirm delivery")
 
@@ -671,6 +683,9 @@ def _parse_item(raw: object, source: Path) -> NotificationItem:
     attempts = raw.get("attempts")
     delivered_to = raw.get("delivered_to")
     last_error = raw.get("last_error")
+    attachment = raw.get("attachment")
+    if attachment is not None and not isinstance(attachment, str):
+        raise CatalogError(f"Invalid notification attachment: {source}")
     if (
         not isinstance(item_id, str)
         or not item_id
@@ -703,6 +718,7 @@ def _parse_item(raw: object, source: Path) -> NotificationItem:
         next_attempt_at=_required_datetime(raw.get("next_attempt_at"), source),
         delivered_to=tuple(delivered_to),
         last_error=last_error,
+        attachment=attachment,
     )
 
 

@@ -5,9 +5,10 @@ same three-method interface. Responsibilities are split by capability:
 
 - ``create_profile`` and ``review_plate`` call the Anthropic API (vision, web
   search restricted to the configured domains, structured JSON output).
-- ``generate_plate`` asks Gemini's image model to paint the whole plate, labels
-  included, in the upstream field-journal house style; ``review_plate`` then
-  transcribes that lettering with vision and fails any misspelling.
+- ``generate_plate`` asks Gemini's image model for a text-free illustration on
+  plain old paper and then composites the factual labels deterministically with
+  Pillow in one fixed font, so every plate carries the same hand and the lettering
+  can never be misspelled or drift in style.
 
 Credentials come from the environment, matching the scheduler's env-file model:
 ``ANTHROPIC_API_KEY`` for research and review, ``GEMINI_API_KEY`` for the
@@ -20,6 +21,7 @@ from __future__ import annotations
 import base64
 import io
 import json
+import os
 from pathlib import Path
 from typing import Any, Final
 
@@ -45,7 +47,7 @@ GEMINI_IMAGE_SIZE: Final = "2K"
 GEMINI_ASPECT_RATIO: Final = "3:4"
 GENERATOR_LABEL: Final = (
     f"Claude API ({ANTHROPIC_MODEL}) research and review / "
-    f"Gemini ({GEMINI_IMAGE_MODEL}) illustration with painted labels"
+    f"Gemini ({GEMINI_IMAGE_MODEL}) illustration with composited labels"
 )
 MAX_OUTPUT_TOKENS: Final = 16000
 # Fail fast on the image call. The google-genai default retries rate limits (429)
@@ -75,6 +77,31 @@ SPECTRA6_PALETTE: Final[tuple[tuple[int, int, int], ...]] = (
     (0, 255, 0),
     (0, 0, 255),
 )
+# Pure black is a native panel pigment and renders crisply; a warm brown ink
+# would dither into black/red/yellow speckle around letterforms.
+INK_COLOR: Final = (0, 0, 0)
+# One fixed font on every plate. The bundled default can be overridden with the
+# INKY_BIRD_LABEL_FONT environment variable (an absolute .ttf path) so candidate
+# faces can be compared on the same illustration without a code change.
+LABEL_FONT_ENV: Final = "INKY_BIRD_LABEL_FONT"
+BUNDLED_LABEL_FONT: Final = Path(__file__).resolve().parent / "assets" / "fonts" / "RockSalt.ttf"
+_FALLBACK_FONTS: Final[tuple[str, ...]] = (
+    "/usr/share/fonts/truetype/dejavu/DejaVuSerif.ttf",
+    "/System/Library/Fonts/Supplemental/Georgia.ttf",
+)
+
+
+def label_font_path() -> Path | None:
+    """Resolve the label font: env override, then the bundled face, then fallbacks."""
+    override = os.environ.get(LABEL_FONT_ENV)
+    if override and Path(override).is_file():
+        return Path(override)
+    if BUNDLED_LABEL_FONT.is_file():
+        return BUNDLED_LABEL_FONT
+    for candidate in _FALLBACK_FONTS:
+        if Path(candidate).is_file():
+            return Path(candidate)
+    return None
 
 
 def illustration_prompt(
@@ -93,8 +120,8 @@ def illustration_prompt(
 Correction required after an independent review of the previous attempt:
 {issues}
 
-Create a new illustration that corrects every issue above, including any lettering issue, by
-rewriting the exact text. Do not copy or lightly edit the previous attempt.
+Create a new illustration that corrects every visual issue above. Lettering is handled outside
+this illustration; never add text to fix anything. Do not copy or lightly edit the previous attempt.
 """
     return f"""Illustrate one scientific field-journal plate for the species below.
 
@@ -121,38 +148,109 @@ proportions, posture, plumage pattern, and colors across them. Do not reproduce 
 background, pose, crop, or composition.
 {correction}
 Style and composition:
-- Portrait 3:4 page on warm aged cream naturalist-notebook paper. The paper fills the image edge to
-  edge and is the only background: render it flat and straight-on, with no book or notebook, no
-  binding, spine, or gutter, no page edges, curl, or drop shadow, and no desk or surface behind it.
-  Paint every element directly onto this one sheet; put nothing on a separate inset card, pasted
-  photo, or bordered panel.
+- Portrait 3:4 page. The background is one sheet of old paper: a warm, slightly yellowed cream
+  with a faint, even pebbled or stippled grain, filling the image edge to edge. It is the only
+  background. Render it perfectly flat and straight-on: no marks, stains, foxing, or creases; no
+  book or notebook; no binding, spiral, spine, or gutter; no page edges, curl, or shadow; no desk
+  or surface behind it; and no border, inset panel, or pasted card anywhere. Keep the ageing
+  subtle so the paper never competes with the drawing.
 - Fine graphite and confident ink linework with restrained transparent watercolor.
 - Bold, crisp, high-contrast lines and flat watercolor washes that survive a six-color e-paper
   panel; avoid soft gradients, airbrushed shading, and low-contrast detail.
 - One full-body bird, large and centered-right, in a natural perched posture.
-- Left margin contains compact handwritten measurements and field marks in a fine naturalist's
-  pen hand: thin ink strokes, slightly italic, with the natural unevenness of quick dip-pen
-  writing. Not rounded marker or comic-style lettering, not uniform typeset-looking letters, and
-  not block capitals.
-- Bottom margin contains a small wing-pattern study, a bill/head study, and color swatches.
-- Right edge carries a faint hand-drawn pencil scale: one thin line with small tick marks and tiny
-  numerals hugging the very edge of the page. Not a printed plastic or wooden ruler: no thick bar,
-  no coloured band, no shading, and no second inch scale.
-- Keep all lettering in the margins on bare paper; never write over the bird, the studies, or the
+- Bottom margin contains a small wing-pattern study, a bill/head study, and unlabeled color
   swatches.
+- No ruler, scale bar, tick marks, or measurement marks of any kind, anywhere on the page.
 - It should look like a carefully scanned scientific field-journal page, not Audubon, not a
   decorative poster, not a collage, and not photorealistic.
 - Quiet margins. No scenery, map, location, coordinates, date, logo, or watermark.
 - Exactly one bird, one head, one beak, two wings, two legs, and one tail. Feet must be plausible.
 
-Lettering:
-- Write the common name, scientific name, and family exactly as given above, letter for letter.
-  Do not abbreviate, paraphrase, or respell the scientific name.
-- Write the length, wingspan, and weight exactly as given, and the field marks as short
-  handwritten notes taken from the list above.
-- Render only the exact species name and the supplied factual notes. Do not invent extra prose,
-  captions, or labels.
+Typography is composited separately by software. Do not render any letters, numerals, words,
+labels, captions, or handwriting anywhere on the page. Keep the left third of the page (full
+height) and the top margin band (roughly the top eighth) as quiet, blank paper: no bird, no
+studies, no swatches, no wash, and no stray marks there, so the labels composited afterward sit
+on bare paper and never touch the artwork.
 """
+
+
+def _label_font(size: int) -> Any:
+    from PIL import ImageFont
+
+    path = label_font_path()
+    if path is not None:
+        return ImageFont.truetype(str(path), size)
+    try:
+        return ImageFont.load_default(size)
+    except TypeError:  # Pillow < 10.1 has no sized default font
+        return ImageFont.load_default()
+
+
+def _wrapped_lines(draw: Any, text: str, font: Any, max_width: int) -> list[str]:
+    lines: list[str] = []
+    current = ""
+    for word in text.split():
+        candidate = f"{current} {word}".strip()
+        if current and draw.textlength(candidate, font=font) > max_width:
+            lines.append(current)
+            current = word
+        else:
+            current = candidate
+    if current:
+        lines.append(current)
+    return lines
+
+
+def composite_plate_labels(image: Any, profile: SpeciesProfileData) -> None:
+    """Draw the factual labels onto a text-free illustration, in place.
+
+    The illustration prompt reserves the left third and top margin for these
+    labels. Rendering them from the validated profile in one fixed font keeps
+    every plate consistent and every name and measurement spelled exactly.
+    """
+    try:
+        from PIL import ImageDraw
+    except ModuleNotFoundError as exc:
+        raise MissingDependencyError("Pillow is required to composite plate labels") from exc
+
+    draw = ImageDraw.Draw(image)
+    width, height = image.size
+    margin = max(width // 20, 24)
+    column_width = width * 3 // 10
+    title_size = max(width // 18, 16)
+    subtitle_size = max(width // 28, 12)
+    body_size = max(width // 44, 10)
+    title_font = _label_font(title_size)
+    subtitle_font = _label_font(subtitle_size)
+    body_font = _label_font(body_size)
+
+    y = margin
+    draw.text((margin, y), profile["common_name"], font=title_font, fill=INK_COLOR)
+    y += int(title_size * 1.25)
+    draw.text((margin, y), profile["scientific_name"], font=subtitle_font, fill=INK_COLOR)
+    y += int(subtitle_size * 1.3)
+    draw.text((margin, y), f"Family {profile['family']}", font=body_font, fill=INK_COLOR)
+    y += int(body_size * 2.4)
+
+    measurements = profile["measurements"]
+    lines = [
+        f"Length: {measurements['length']}",
+        f"Wingspan: {measurements['wingspan']}",
+        f"Weight: {measurements['weight']}",
+        "",
+    ]
+    for mark in profile["field_marks"]:
+        wrapped = _wrapped_lines(draw, mark, body_font, column_width - body_size)
+        if wrapped:
+            lines.append(f"\u2022 {wrapped[0]}")
+            lines.extend(f"   {extra}" for extra in wrapped[1:])
+    limit = height - 2 * margin
+    for line in lines:
+        if y > limit:
+            break
+        if line:
+            draw.text((margin, y), line, font=body_font, fill=INK_COLOR)
+        y += int(body_size * 1.5)
 
 
 def spectra_panel_preview(source_path: Path, destination_path: Path) -> Path:
@@ -204,20 +302,18 @@ independently verified facts. Confirm that no place name, ZIP code, coordinates,
 local-observation detail appears. Record every concrete issue and return at least two direct HTTPS
 source URLs from distinct configured domains used for verification.
 
-All lettering on the plate was painted by the image model, not typeset by software. Transcribe
-every word on the plate and check it letter for letter against the verified facts: the common
-name, the scientific name (genus and species spelled exactly), the family, the length, wingspan,
-and weight, and each field mark. Any misspelling, dropped or extra letter, invented word,
-garbled or illegible label, or claim absent from the verified data is a material text error:
-score text_accuracy 3 or lower and set passed=false.
+All lettering on the plate was composited by software from the verified profile in a fixed font,
+so its spelling is exact by construction: do not lower text_accuracy for the typeface. Check only
+that every label is legible on Image 2 and that no label overlaps the bird, the studies, or the
+swatches.
 
-House style is part of composition_quality. Every plate must be one flat, full-bleed sheet of
-cream paper with all lettering in a fine naturalist's pen hand (thin, slightly italic ink
-strokes) and a faint, thin, hand-drawn pencil scale along the right edge. Score
-composition_quality 3 or lower and set passed=false if any of these appear: a visible notebook
-binding, spiral, spine, or gutter; a torn, curled, or aged page edge; the bird or any study
-placed inside a drawn border, inset panel, or pasted card; rounded marker, comic-style, or
-typeset-looking lettering; or a thick, coloured, shaded, or printed-looking ruler.
+House style is part of composition_quality. The plate must be one flat sheet of plain old paper
+carrying only the illustration and the composited labels. Score composition_quality 3 or lower
+and set passed=false if any of these appear: any letters, numerals, words, or handwriting painted
+by the image model (anything not in the composited label column); any ruler, scale bar, tick
+marks, or measurement marks; a visible notebook binding, spiral, spine, or gutter; a torn, curled,
+or aged page edge; stains, foxing, or heavy ageing marks on the paper; or the bird or any study
+placed inside a drawn border, inset panel, or pasted card.
 
 Set passed=true only when all four scores are at least 4, location_free is true, the bird has
 exactly one head, one beak, two wings, two legs, and one tail, and there are no material species or
@@ -588,6 +684,7 @@ class ClaudeRunner:
             # LANCZOS keeps the 2K linework crisp through the downscale; softened
             # lines dither into fuzz on the panel.
             plate = ImageOps.fit(source.convert("RGB"), PORTRAIT_SIZE, PILImage.Resampling.LANCZOS)
+        composite_plate_labels(plate, profile)
         output_path.parent.mkdir(parents=True, exist_ok=True)
         plate.save(output_path, format="PNG")
         if not output_path.is_file() or output_path.stat().st_size == 0:

@@ -266,6 +266,28 @@ def generate_command(args: argparse.Namespace) -> int:
                     title=f"{common_name} plate approved",
                     body="The generated plate passed factual and visual review.",
                 )
+    awaiting = result.get("awaiting_approval")
+    if isinstance(awaiting, list):
+        for item in awaiting:
+            if not isinstance(item, dict):
+                continue
+            taxon_id = item.get("taxon_id")
+            common_name = item.get("common_name")
+            portrait = item.get("portrait")
+            if not isinstance(taxon_id, int) or not isinstance(common_name, str):
+                continue
+            safe_notify(
+                config,
+                NotificationEvent.GENERATION_PENDING,
+                dedupe_key=f"pending:{taxon_id}",
+                title=f"{common_name} plate awaiting your approval",
+                body=(
+                    f"A new {common_name} plate passed automated review and is waiting for "
+                    f"you. Approve: inky-bird-frame approve {taxon_id}. "
+                    f"Reject: inky-bird-frame reject {taxon_id} --reason \"...\"."
+                ),
+                attachment=portrait if isinstance(portrait, str) else None,
+            )
     failures = result.get("failures")
     transient_failures = []
     if isinstance(failures, list):

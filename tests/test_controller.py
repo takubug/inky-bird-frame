@@ -91,6 +91,8 @@ port = 8793
 references_per_species = 4
 generations_per_cycle = 1
 max_generation_attempts = 3
+# These tests exercise the legacy auto-publish path; the gated path has its own test.
+require_approval = false
 
 [display_node]
 controller_url = "http://controller.test:8793"
@@ -690,6 +692,55 @@ class ControllerTests(unittest.TestCase):
         self.assertIsInstance(failures, list)
         if isinstance(failures, list):
             self.assertFalse(failures[0]["terminal"])
+
+    def test_cycle_holds_a_reviewed_candidate_at_pending_when_approval_is_required(self) -> None:
+        species = BirdSpecies(9083, "Northern Cardinal", "Cardinalis cardinalis", 2, "test")
+        location = DiscoveryLocation("12345", "Exampleville", "XY", 1.0, 2.0)
+        review = QualityReview(
+            True,
+            5,
+            4,
+            5,
+            5,
+            True,
+            (),
+            (
+                {"title": "Cornell", "url": "https://example.test/cornell"},
+                {"title": "ADW", "url": "https://example.test/adw"},
+            ),
+        )
+        with TemporaryDirectory() as temporary:
+            config_path = Path(temporary) / "config.toml"
+            config_path.write_text(CONFIG.replace("require_approval = false", "require_approval = true"))
+            config = load_config(config_path)
+            self.assertTrue(config.controller.require_approval)
+            candidate = candidate_directory(config.controller.state_dir, species)
+            candidate.mkdir(parents=True)
+            (candidate / "portrait.png").write_bytes(b"portrait")
+            (candidate / "display.png").write_bytes(b"display")
+            write_candidate_manifest(
+                candidate,
+                species,
+                PROFILE,
+                [],
+                review,
+                generator="test",
+                prompt_version=PROMPT_VERSION,
+                attempt=2,
+                max_attempts=3,
+            )
+            with patch(
+                "inky_bird_frame.controller.discover_species",
+                return_value=discovery_result(location, [species]),
+            ):
+                result = run_controller_cycle(config)
+
+            # The start-of-cycle sweep must not publish it, and it must still be pending.
+            self.assertEqual(result["published_pending"], [])
+            self.assertTrue((candidate / "manifest.json").is_file())
+            self.assertEqual(
+                list((config.controller.catalog_dir / "species").glob("9083-*")), []
+            )
 
     def test_cycle_publishes_a_previously_reviewed_pending_candidate(self) -> None:
         species = BirdSpecies(9083, "Northern Cardinal", "Cardinalis cardinalis", 2, "test")

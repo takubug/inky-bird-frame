@@ -26,7 +26,7 @@ from inky_bird_frame.cli import (
     serve_command,
     species_to_dict,
 )
-from inky_bird_frame.config import DiscoveryProvider
+from inky_bird_frame.config import DiscoveryProvider, NotificationEvent
 from inky_bird_frame.controller import REVIEW_FAILURE_FALLBACK, exclusive_cycle_lock
 from inky_bird_frame.errors import (
     ConfigurationError,
@@ -367,6 +367,38 @@ rotation_mode = "shuffle_bag"
 
         self.assertEqual(notify.call_count, 1)
         self.assertEqual(notify.call_args.kwargs["dedupe_key"], "1")
+
+    def test_generate_notifies_pending_candidates_with_the_plate_attached(self) -> None:
+        result = {
+            "published_pending": [],
+            "generated": [],
+            "awaiting_approval": [
+                {
+                    "taxon_id": 7,
+                    "common_name": "Held Bird",
+                    "candidate_dir": "/state/pending/7-held-bird",
+                    "portrait": "/state/pending/7-held-bird/portrait.png",
+                }
+            ],
+            "failures": [],
+            "deferred_count": 0,
+            "outstanding_retry_count": 0,
+        }
+        with (
+            patch("inky_bird_frame.cli._config"),
+            patch("inky_bird_frame.cli.run_generation_cycle", return_value=result),
+            patch("inky_bird_frame.cli.safe_notify") as notify,
+            patch("inky_bird_frame.cli.safe_record_recovery"),
+            redirect_stdout(io.StringIO()),
+        ):
+            generate_command(Namespace())
+
+        self.assertEqual(notify.call_count, 1)
+        kwargs = notify.call_args.kwargs
+        self.assertEqual(notify.call_args.args[1], NotificationEvent.GENERATION_PENDING)
+        self.assertEqual(kwargs["dedupe_key"], "pending:7")
+        self.assertIn("approve 7", kwargs["body"])
+        self.assertEqual(kwargs["attachment"], "/state/pending/7-held-bird/portrait.png")
 
     def test_generate_does_not_recover_while_species_remain_deferred(self) -> None:
         result = {

@@ -938,6 +938,9 @@ def record_failure(state_dir: Path, species: BirdSpecies, error: InkyBirdFrameEr
 
 
 def approve_passing_candidates(config: AppConfig) -> list[dict[str, object]]:
+    if config.controller.require_approval:
+        # Human-in-the-loop: pending candidates wait for an explicit `approve`.
+        return []
     published: list[dict[str, object]] = []
     clear_catalog_staging(config.controller.catalog_dir)
     pending_root = config.controller.state_dir / "pending"
@@ -986,11 +989,12 @@ def run_generation_cycle(config: AppConfig) -> dict[str, object]:
             and not _has_terminal_state(config.controller.state_dir, species.taxon_id)
         ]
         generated: list[dict[str, object]] = []
+        awaiting: list[dict[str, object]] = []
         failures: list[dict[str, object]] = []
         retry_store = RetryStore(config.controller.state_dir / "generation-retries.json")
         attempted_count = 0
         for species in eligible:
-            if len(generated) >= config.controller.generations_per_cycle:
+            if len(generated) + len(awaiting) >= config.controller.generations_per_cycle:
                 break
             if attempted_count >= config.controller.max_species_attempts_per_cycle:
                 break
@@ -1000,27 +1004,41 @@ def run_generation_cycle(config: AppConfig) -> dict[str, object]:
             try:
                 guidance = retry_store.quality_guidance(species.taxon_id)
                 if guidance is None:
-                    generate_candidate(config, species, config.controller.workspace_dir)
+                    candidate = generate_candidate(
+                        config, species, config.controller.workspace_dir
+                    )
                 else:
-                    generate_candidate(
+                    candidate = generate_candidate(
                         config,
                         species,
                         config.controller.workspace_dir,
                         initial_correction_findings=guidance.findings,
                     )
-                with catalog_state_lock(config.controller.state_dir):
-                    entry = approve_candidate(
-                        config.controller.state_dir,
-                        config.controller.catalog_dir,
-                        species.taxon_id,
+                if config.controller.require_approval:
+                    # Human-in-the-loop: the candidate stays pending until someone
+                    # runs `approve`; nothing reaches the catalog unattended.
+                    awaiting.append(
+                        {
+                            "taxon_id": species.taxon_id,
+                            "common_name": species.common_name,
+                            "candidate_dir": str(candidate),
+                            "portrait": str(candidate / "portrait.png"),
+                        }
                     )
-                generated.append(
-                    {
-                        "taxon_id": species.taxon_id,
-                        "common_name": species.common_name,
-                        "published": entry.as_dict(),
-                    }
-                )
+                else:
+                    with catalog_state_lock(config.controller.state_dir):
+                        entry = approve_candidate(
+                            config.controller.state_dir,
+                            config.controller.catalog_dir,
+                            species.taxon_id,
+                        )
+                    generated.append(
+                        {
+                            "taxon_id": species.taxon_id,
+                            "common_name": species.common_name,
+                            "published": entry.as_dict(),
+                        }
+                    )
                 retry_store.clear(species.taxon_id)
                 retry_store.clear_quality_guidance(species.taxon_id)
             except InsufficientReferencesError as exc:
@@ -1135,6 +1153,7 @@ def run_generation_cycle(config: AppConfig) -> dict[str, object]:
             "outstanding_retry_count": len(outstanding_retries),
             "queued_count": len(remaining_queue),
             "generated": generated,
+            "awaiting_approval": awaiting,
             "failures": failures,
         }
 

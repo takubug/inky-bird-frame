@@ -65,6 +65,7 @@ def discovery_source_label(providers: tuple[DiscoveryProvider, ...]) -> str:
 class NotificationEvent(StrEnum):
     DISCOVERY = "discovery"
     GENERATION_APPROVED = "generation_approved"
+    GENERATION_PENDING = "generation_pending"
     TERMINAL_ERROR = "terminal_error"
     DEGRADED = "degraded"
     RECOVERED = "recovered"
@@ -116,6 +117,8 @@ class ControllerConfig:
     generations_per_cycle: int
     max_generation_attempts: int
     generation_backend: GenerationBackend = GenerationBackend.CODEX
+    # Human-in-the-loop: generated plates stop at pending until `approve` is run.
+    require_approval: bool = True
     max_species_attempts_per_cycle: int = 5
     retry_initial_minutes: int = 30
     retry_max_minutes: int = 1440
@@ -607,6 +610,7 @@ def load_config(path: Path, *, load_secrets: bool = True) -> AppConfig:
             birdweather_token_env=birdweather_token_env,
         ),
         controller=ControllerConfig(
+            require_approval=_optional_boolean(controller, "require_approval", default=True),
             workspace_dir=_path(_string(controller, "workspace_dir"), base_dir),
             catalog_dir=_path(_string(controller, "catalog_dir"), base_dir),
             state_dir=_path(_string(controller, "state_dir"), base_dir),

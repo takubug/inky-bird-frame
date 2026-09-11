@@ -12,13 +12,16 @@ from inky_bird_frame.claude_runner import (
     SPECTRA6_PALETTE,
     _final_text,
     _inline_image_bytes,
+    composite_plate_labels,
     illustration_prompt,
+    label_font_path,
     review_prompt_with_preview,
     spectra_panel_preview,
     supported_schema,
 )
 from inky_bird_frame.codex_runner import PROFILE_SCHEMA, REVIEW_SCHEMA
 from inky_bird_frame.errors import GenerationError
+from inky_bird_frame.images import PAPER_COLOR, PORTRAIT_SIZE
 from inky_bird_frame.models import ReferencePhoto, SpeciesProfileData
 
 
@@ -72,17 +75,17 @@ class _Response:
 
 
 class IllustrationPromptTests(unittest.TestCase):
-    def test_prompt_carries_identity_and_requires_verbatim_lettering(self) -> None:
+    def test_prompt_carries_identity_and_forbids_lettering_and_rulers(self) -> None:
         prompt = illustration_prompt(_species(), _profile(), [_reference()])
         self.assertIn('"Test Bird"', prompt)
         self.assertIn('"Avis test"', prompt)
         self.assertIn('"Testidae"', prompt)
-        self.assertIn('"1 in"', prompt)
         self.assertIn("(c) Observer", prompt)
-        # The image model paints the labels itself, in the upstream house style.
-        self.assertIn("letter for letter", prompt)
-        self.assertIn("hand-drawn pencil scale", prompt)
-        self.assertNotIn("Do not render any letters", prompt)
+        # Labels are composited by software in one fixed font; the model draws neither
+        # text nor a ruler, both of which drifted when it was allowed to.
+        self.assertIn("Do not render any letters", prompt)
+        self.assertIn("No ruler, scale bar, tick marks", prompt)
+        self.assertNotIn("letter for letter", prompt)
         self.assertNotIn("Correction required", prompt)
 
     def test_prompt_includes_correction_findings(self) -> None:
@@ -100,24 +103,18 @@ class IllustrationPromptTests(unittest.TestCase):
         self.assertIn("six-color e-paper", prompt)
         self.assertIn("avoid soft gradients", prompt)
 
-    def test_prompt_forbids_book_object_framing(self) -> None:
+    def test_prompt_specifies_plain_old_paper(self) -> None:
         prompt = illustration_prompt(_species(), _profile(), [_reference()])
-        self.assertIn("naturalist-notebook paper", prompt)
-        self.assertIn("edge to\n  edge", prompt)
-        self.assertIn("no book or notebook", prompt)
+        self.assertIn("slightly yellowed cream", prompt)
+        self.assertIn("pebbled or stippled grain", prompt)
+        self.assertIn("no marks, stains, foxing, or creases", prompt)
+        self.assertIn("no binding, spiral, spine, or gutter", prompt)
+        self.assertIn("Keep the ageing\n  subtle", prompt)
 
-    def test_prompt_keeps_lettering_in_the_margins(self) -> None:
+    def test_prompt_reserves_the_label_zones(self) -> None:
         prompt = illustration_prompt(_species(), _profile(), [_reference()])
-        self.assertIn("never write over the bird", prompt)
-        self.assertIn("Left margin contains compact handwritten", prompt)
-
-    def test_prompt_forbids_the_known_style_drifts(self) -> None:
-        prompt = illustration_prompt(_species(), _profile(), [_reference()])
-        # A printed school ruler and rounded comic lettering slipped through once;
-        # both are now named explicitly.
-        self.assertIn("Not a printed plastic or wooden ruler", prompt)
-        self.assertIn("not block capitals", prompt)
-        self.assertIn("Not rounded marker or comic-style lettering", prompt)
+        self.assertIn("left third of the page", prompt)
+        self.assertIn("never touch the artwork", prompt)
 
     def test_generator_label_names_both_models(self) -> None:
         self.assertIn("claude-sonnet-5", GENERATOR_LABEL)
@@ -137,18 +134,46 @@ class ReviewPromptTests(unittest.TestCase):
         self.assertIn("black, white, red, yellow, green, blue", prompt)
         self.assertIn("birds.example, field.example", prompt)
 
-    def test_preview_prompt_requires_transcribing_the_painted_lettering(self) -> None:
+    def test_preview_prompt_treats_composited_lettering_as_exact(self) -> None:
         prompt = review_prompt_with_preview(_species(), _profile(), [_reference()], ("a.example",))
-        self.assertIn("painted by the image model", prompt)
-        self.assertIn("letter for letter", prompt)
-        self.assertIn("score text_accuracy 3 or lower", prompt)
+        self.assertIn("composited by software", prompt)
+        self.assertIn("do not lower text_accuracy for the typeface", prompt)
 
-    def test_preview_prompt_polices_the_house_style(self) -> None:
+    def test_preview_prompt_fails_painted_text_rulers_and_page_objects(self) -> None:
         prompt = review_prompt_with_preview(_species(), _profile(), [_reference()], ("a.example",))
         self.assertIn("House style is part of composition_quality", prompt)
-        self.assertIn("printed-looking ruler", prompt)
+        self.assertIn("painted\nby the image model", prompt)
+        self.assertIn("any ruler, scale bar, tick", prompt)
         self.assertIn("spiral, spine, or gutter", prompt)
         self.assertIn("inset panel", prompt)
+
+
+class FontAndCompositeTests(unittest.TestCase):
+    def test_bundled_font_is_the_default(self) -> None:
+        path = label_font_path()
+        assert path is not None
+        self.assertEqual(path.name, "RockSalt.ttf")
+        self.assertTrue(path.is_file())
+
+    def test_env_override_wins_when_it_exists(self) -> None:
+        from inky_bird_frame.claude_runner import BUNDLED_LABEL_FONT, LABEL_FONT_ENV
+
+        with patch.dict("os.environ", {LABEL_FONT_ENV: str(BUNDLED_LABEL_FONT)}):
+            self.assertEqual(label_font_path(), BUNDLED_LABEL_FONT)
+        with patch.dict("os.environ", {LABEL_FONT_ENV: "/nonexistent/font.ttf"}):
+            self.assertEqual(label_font_path(), BUNDLED_LABEL_FONT)
+
+    def test_labels_are_drawn_in_pure_black_without_resizing(self) -> None:
+        from PIL import Image, ImageChops
+
+        image = Image.new("RGB", PORTRAIT_SIZE, PAPER_COLOR)
+        composite_plate_labels(image, _profile())
+        self.assertEqual(image.size, PORTRAIT_SIZE)
+        blank = Image.new("RGB", PORTRAIT_SIZE, PAPER_COLOR)
+        self.assertIsNotNone(ImageChops.difference(image, blank).getbbox())
+        color_counts = image.getcolors(1_000_000)
+        assert color_counts is not None
+        self.assertIn((0, 0, 0), {color for _, color in color_counts})
 
 
 class SpectraPreviewTests(unittest.TestCase):

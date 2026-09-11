@@ -37,6 +37,11 @@ inky-bird-frame = "inky_bird_frame.cli:main"
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
+# Ship the bundled label fonts inside the wheel so the `--no-editable` container
+# build (Dockerfile) has them under inky_bird_frame/assets/fonts/.
+[tool.hatch.build.targets.wheel.force-include]
+"src/inky_bird_frame/assets/fonts" = "inky_bird_frame/assets/fonts"
+
 [tool.ruff]
 line-length = 100
 target-version = "py311"

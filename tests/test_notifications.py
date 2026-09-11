@@ -10,9 +10,11 @@ from unittest.mock import patch
 from inky_bird_frame.config import AppConfig, NotificationEvent, NotificationsConfig, load_config
 from inky_bird_frame.errors import ConfigurationError
 from inky_bird_frame.notifications import (
+    _read_state,
     check_display_heartbeat,
     dispatch_notifications,
     enqueue_notification,
+    notification_state_path,
     notification_status,
     record_degradation,
     record_recovery,
@@ -108,6 +110,26 @@ class NotificationTests(unittest.TestCase):
         path = Path(temporary) / "config.toml"
         path.write_text(CONFIG)
         return load_config(path)
+
+    def test_attachment_survives_the_queue_round_trip(self) -> None:
+        with TemporaryDirectory() as temporary:
+            config = self._config(temporary)
+            # Use whatever event the fixture's first destination subscribes to.
+            event = next(iter(config.notifications.destinations[0].events))
+            queued = enqueue_notification(
+                config,
+                event,
+                dedupe_key="plate-7",
+                title="Held Bird plate awaiting your approval",
+                body="approve 7",
+                attachment="/state/pending/7-held-bird/portrait.png",
+            )
+            self.assertTrue(queued)
+            state = _read_state(notification_state_path(config))
+        self.assertEqual(len(state.pending), 1)
+        item = state.pending[0]
+        self.assertEqual(item.attachment, "/state/pending/7-held-bird/portrait.png")
+        self.assertEqual(item.as_dict()["attachment"], item.attachment)
 
     def test_validation_and_status_redact_service_urls(self) -> None:
         with TemporaryDirectory() as temporary:

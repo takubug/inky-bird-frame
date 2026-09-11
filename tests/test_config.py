@@ -443,6 +443,16 @@ class ConfigTests(unittest.TestCase):
 
         self.assertEqual(config.controller.codex_path, Path("/opt/local/bin/codex"))
 
+    def test_require_approval_defaults_on_and_can_be_disabled(self) -> None:
+        with TemporaryDirectory() as temporary:
+            path = Path(temporary) / "config.toml"
+            path.write_text(CONFIG)
+            self.assertTrue(load_config(path).controller.require_approval)
+            path.write_text(
+                CONFIG.replace("[controller]\n", "[controller]\nrequire_approval = false\n", 1)
+            )
+            self.assertFalse(load_config(path).controller.require_approval)
+
     def test_generation_backend_defaults_to_codex(self) -> None:
         with TemporaryDirectory() as temporary:
             path = Path(temporary) / "config.toml"
