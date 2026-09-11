@@ -161,8 +161,9 @@ Style and composition:
 - Bold, crisp, high-contrast lines and flat watercolor washes that survive a six-color e-paper
   panel; avoid soft gradients, airbrushed shading, and low-contrast detail.
 - One full-body bird, large and centered-right, in a natural perched posture.
-- Bottom margin contains a small wing-pattern study, a bill/head study, and unlabeled color
-  swatches.
+- Beneath the bird, in the lower-right region only, exactly three small elements: one
+  wing-pattern study, one bill/head study, and one row of unlabeled color swatches. No other
+  figures, studies, or flight poses anywhere, and nothing at all in the lower-left of the page.
 - No ruler, scale bar, tick marks, or measurement marks of any kind, anywhere on the page.
 - It should look like a carefully scanned scientific field-journal page, not Audubon, not a
   decorative poster, not a collage, and not photorealistic.
@@ -170,10 +171,10 @@ Style and composition:
 - Exactly one bird, one head, one beak, two wings, two legs, and one tail. Feet must be plausible.
 
 Typography is composited separately by software. Do not render any letters, numerals, words,
-labels, captions, or handwriting anywhere on the page. Keep the left third of the page (full
-height) and the top margin band (roughly the top eighth) as quiet, blank paper: no bird, no
-studies, no swatches, no wash, and no stray marks there, so the labels composited afterward sit
-on bare paper and never touch the artwork.
+labels, captions, or handwriting anywhere on the page. Keep the entire left third of the page,
+from the very top to the very bottom, and the top margin band (roughly the top eighth) as quiet,
+blank paper: no bird, no studies, no swatches, no wash, and no stray marks there, so the labels
+composited afterward sit on bare paper and never touch the artwork.
 """
 
 
@@ -222,10 +223,28 @@ def composite_plate_labels(image: Any, profile: SpeciesProfileData) -> None:
     column_width = width * 3 // 10
     title_size = max(width // 18, 16)
     subtitle_size = max(width // 28, 12)
-    body_size = max(width // 44, 10)
     title_font = _label_font(title_size)
     subtitle_font = _label_font(subtitle_size)
-    body_font = _label_font(body_size)
+    # The illustration keeps its studies in the lower-right, so the label block
+    # must end above the bottom 30% of the page. Shrink the body face until the
+    # measurements and field marks fit; never spill into the studies' band.
+    label_floor = height * 7 // 10
+    body_size = max(width // 44, 10)
+    minimum_body = max(width // 70, 8)
+    while True:
+        body_font = _label_font(body_size)
+        block_top = (
+            margin + int(title_size * 1.25) + int(subtitle_size * 1.3) + int(body_size * 2.4)
+        )
+        lines = _label_lines(draw, profile, body_font, body_size, column_width)
+        block_bottom = block_top + len(lines) * int(body_size * 1.5)
+        if block_bottom <= label_floor or body_size <= minimum_body:
+            break
+        body_size -= 1
+    # At the minimum face, drop trailing lines rather than cross into the band.
+    line_height = int(body_size * 1.5)
+    room = max((label_floor - block_top) // line_height, 0)
+    lines = lines[:room]
 
     y = margin
     draw.text((margin, y), profile["common_name"], font=title_font, fill=INK_COLOR)
@@ -235,6 +254,16 @@ def composite_plate_labels(image: Any, profile: SpeciesProfileData) -> None:
     draw.text((margin, y), f"Family {profile['family']}", font=body_font, fill=INK_COLOR)
     y += int(body_size * 2.4)
 
+    for line in lines:
+        if line:
+            draw.text((margin, y), line, font=body_font, fill=INK_COLOR)
+        y += int(body_size * 1.5)
+
+
+def _label_lines(
+    draw: Any, profile: SpeciesProfileData, body_font: Any, body_size: int, column_width: int
+) -> list[str]:
+    """Wrap the measurements and field marks into the label column."""
     measurements = profile["measurements"]
     lines: list[str] = []
     for label, value in (
@@ -253,13 +282,7 @@ def composite_plate_labels(image: Any, profile: SpeciesProfileData) -> None:
         if wrapped:
             lines.append(f"\u2022 {wrapped[0]}")
             lines.extend(f"   {extra}" for extra in wrapped[1:])
-    limit = height - 2 * margin
-    for line in lines:
-        if y > limit:
-            break
-        if line:
-            draw.text((margin, y), line, font=body_font, fill=INK_COLOR)
-        y += int(body_size * 1.5)
+    return lines
 
 
 def spectra_panel_preview(source_path: Path, destination_path: Path) -> Path:

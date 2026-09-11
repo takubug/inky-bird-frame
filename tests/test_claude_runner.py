@@ -181,6 +181,28 @@ class FontAndCompositeTests(unittest.TestCase):
             "measurement text overran the label column",
         )
 
+    def test_label_block_never_enters_the_bottom_band(self) -> None:
+        from PIL import Image
+
+        profile = _profile()
+        profile["field_marks"] = [
+            "a very long field mark that wraps onto several lines of the label column " * 2
+        ] * 9
+        image = Image.new("RGB", PORTRAIT_SIZE, PAPER_COLOR)
+        composite_plate_labels(image, profile)
+        width, height = image.size
+        band = image.crop((0, height * 7 // 10, width, height))
+        self.assertIsNone(
+            Image.eval(band.convert("L"), lambda v: 255 if v < 128 else 0).getbbox(),
+            "label text entered the bottom 30% reserved for the studies",
+        )
+
+    def test_prompt_confines_studies_to_the_lower_right(self) -> None:
+        prompt = illustration_prompt(_species(), _profile(), [_reference()])
+        self.assertIn("lower-right region only, exactly three", prompt)
+        self.assertIn("nothing at all in the lower-left", prompt)
+        self.assertIn("from the very top to the very bottom", prompt)
+
     def test_labels_are_drawn_in_pure_black_without_resizing(self) -> None:
         from PIL import Image, ImageChops
 
