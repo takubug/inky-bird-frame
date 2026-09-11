@@ -1,57 +1,61 @@
 {
-  "approved_at": "2026-07-23T01:44:29+00:00",
+  "approved_at": "2026-09-11T09:58:26+00:00",
   "assets": {
     "display": {
       "filename": "display.png",
-      "sha256": "0955a19fb511cd63e97e7312ab90ef280021c2db5c1fc75215a0e4ce13ca86ff"
+      "sha256": "39ef510aec05a98b6b8146564a7f13ae4260d9e5aeac0bbaab42b58465886b37"
     },
     "portrait": {
       "filename": "portrait.png",
-      "sha256": "de49e61b2e706fb66d3a86753613cb4e6c13f85ba1fa2bbc4d4f82ff35ada447"
+      "sha256": "14460460a85b730d7631699403936b2708dc6f4691168bd45d3bead02038ba7a"
     }
   },
   "common_name": "Black Swan",
   "generation": {
     "attempt": 1,
-    "generated_at": "2026-07-23T01:29:38+00:00",
+    "generated_at": "2026-09-11T09:52:15+00:00",
     "generator": "Claude API (claude-sonnet-5) research and review / Gemini (gemini-3-pro-image-preview) illustration with composited labels",
     "max_attempts": 3,
     "prompt_version": "field-journal-v2"
   },
   "profile": {
-    "behavior": "Primarily herbivorous, feeding on submerged aquatic plants and algae by dabbling and upending with its long neck; occasionally grazes on grasses near water's edge. Highly social outside breeding season, often gathering in large flocks, and nomadic in response to changing water levels and climate. Forms monogamous pair bonds and both sexes assist in nest building, incubation, and cygnet care.",
+    "behavior": "Highly social and often nomadic, forming large flocks outside the breeding season and moving in response to water availability and food supply; feeds by dabbling and up-ending in shallow water to reach submerged vegetation; forms strong monogamous pair bonds, with both sexes sharing incubation and cygnet care; known for elaborate paired courtship displays involving synchronized calling and neck movements.",
     "common_name": "Black Swan",
     "family": "Anatidae",
     "field_marks": [
-      "All-black body plumage with curled, shaggy-edged back and wing feathers",
-      "Long, slender, S-curved neck proportionally longer than other swans",
-      "Bright red bill with a pale whitish band near the tip",
-      "Red-orange eyes contrasting with black head",
-      "White flight feathers concealed at rest, flashing prominently in flight or wing-flap displays",
-      "Black legs and webbed feet"
+      "Almost entirely black plumage with curly, ruffled feathers on the back and wings",
+      "Bright red bill with a pale white-to-pinkish band near the tip",
+      "White flight feathers visible mainly in flight, contrasting with black body",
+      "Long, gracefully curved neck, longer relative to body than other swans",
+      "Dark reddish-brown to black eyes",
+      "Legs and feet dark grey to black"
     ],
-    "habitat": "Large freshwater and brackish wetlands, lakes, swamps, estuaries, and slow-moving rivers with abundant submerged and emergent aquatic vegetation.",
+    "habitat": "Large shallow wetlands, lakes, swamps, estuaries, and slow-moving rivers with open water and abundant aquatic vegetation; also found in coastal lagoons and man-made reservoirs.",
     "measurements": {
       "length": "110-142 cm",
       "weight": "3.7-9 kg",
       "wingspan": "160-200 cm"
     },
     "palette": [
-      "Jet black",
-      "Crimson red",
-      "Snow white",
-      "Soft grey",
-      "Charcoal black"
+      "jet black",
+      "deep charcoal grey",
+      "bright crimson red",
+      "white",
+      "pale pink"
     ],
     "scientific_name": "Cygnus atratus",
     "sources": [
       {
-        "title": "Black Swan - Cygnus atratus",
-        "url": "https://en.wikipedia.org/wiki/Cygnus_atratus"
+        "title": "Black Swan - Wikipedia",
+        "url": "https://en.wikipedia.org/wiki/Black_swan"
       },
       {
-        "title": "Cygnus atratus (Black Swan)",
+        "title": "Cygnus atratus (Animal Diversity Web)",
         "url": "https://animaldiversity.org/accounts/Cygnus_atratus/"
+      },
+      {
+        "title": "Black Swan - eBird",
+        "url": "https://ebird.org/species/blkswa/US-CA"
       }
     ],
     "taxon_id": 6914
@@ -60,15 +64,14 @@
     "anatomy_accuracy": 5,
     "composition_quality": 4,
     "findings": [
-      "Species correctly identified as Black Swan (Cygnus atratus); no confusion with Mute, Trumpeter, or Black-necked Swan",
-      "Measurements (length 110-142 cm, wingspan 160-200 cm, weight 3.7-9 kg) match standard published ranges",
-      "All six field marks (black plumage with curled tertials, S-curved neck, red bill with pale tip band, red-orange eye, white flight feathers concealed at rest, black legs/feet) verified against reference photos",
-      "Anatomy correct: one head, one beak, two wings (folded + spread-wing inset), two legs, one tail",
-      "No place names, coordinates, ZIP codes, or maps present; location-free requirement satisfied",
-      "E-paper quantization (Image 2): title and field-mark text remain solidly legible in black against dithered background",
-      "E-paper defect: soft-grey and charcoal-black swatches in color-key become nearly indistinguishable from white/each other after 6-color quantization",
-      "E-paper defect: main body wash acquires colored dither speckling instead of smooth black wash, slightly reducing rendering cleanliness though silhouette remains identifiable",
-      "Wing-spread and head insets survive quantization well with strong black/white/red contrast"
+      "All field marks (black plumage, curly back/wing feathers, red bill with pale band, white flight feathers, long curved neck, dark legs/feet) consistent with verified references and Wikipedia/ADW descriptions",
+      "Measurements (length 110-142 cm, wingspan 160-200 cm, weight 3.7-9 kg) match standard cited figures, no contradiction found",
+      "Anatomy count on main figure normal: one head, one beak, two wings (near visible/far implied per standard profile convention), two legs, one tail; supplementary wing/head studies are standard field-guide vignettes, not extra body parts",
+      "No place name, ZIP code, coordinates, or map present; location-free check passed",
+      "No painted extraneous lettering, rulers, scale bars, notebook binding/spiral, torn/aged edges, stains, or drawn borders/insets detected; plate meets flat-sheet house style",
+      "E-paper quantization (Image 2): label text remains legible black-on-light background with no overlap on bird, studies, or swatches",
+      "E-paper quantization degrades the charcoal-grey wash into a noisy black/blue/green dither and reduces distinctiveness of the grey and pale-pink swatches from black and white respectively, a modest legibility/contrast deduction",
+      "No material species or factual text errors identified"
     ],
     "location_free": true,
     "passed": true,
@@ -76,12 +79,16 @@
     "text_accuracy": 5,
     "verification_sources": [
       {
-        "title": "Black swan - Wikipedia",
-        "url": "https://en.wikipedia.org/wiki/Cygnus_atratus"
+        "title": "Black Swan - Wikipedia",
+        "url": "https://en.wikipedia.org/wiki/Black_swan"
       },
       {
-        "title": "Cygnus atratus (Black Swan) - Animal Diversity Web",
+        "title": "Cygnus atratus (Animal Diversity Web)",
         "url": "https://animaldiversity.org/accounts/Cygnus_atratus/"
+      },
+      {
+        "title": "Black Swan - eBird",
+        "url": "https://ebird.org/species/blkswa/US"
       }
     ]
   },
@@ -100,34 +107,8 @@
       "width": 1536
     },
     {
-      "attribution": "no rights reserved",
-      "filename": "02-518091189.jpg",
-      "height": 1897,
-      "image_url": "https://inaturalist-open-data.s3.amazonaws.com/photos/518091189/large.jpg",
-      "license_code": "cc0",
-      "observation_id": 288110726,
-      "observer": "jason_graham",
-      "photo_id": 518091189,
-      "sha256": "da951a7f5c90a5a4f7ad2df9c4036f7b3ecbafdc4c59de4954502de509e3f612",
-      "source_url": "https://www.inaturalist.org/observations/288110726",
-      "width": 2048
-    },
-    {
-      "attribution": "(c) Luis G Restrepo, some rights reserved (CC BY)",
-      "filename": "03-538524318.jpg",
-      "height": 1536,
-      "image_url": "https://inaturalist-open-data.s3.amazonaws.com/photos/538524318/large.jpg",
-      "license_code": "cc-by",
-      "observation_id": 298939818,
-      "observer": "luchogu",
-      "photo_id": 538524318,
-      "sha256": "8f5045a5431a0f21207584ff529f0c68f02c930d22ab4a53c4a67092a05d1215",
-      "source_url": "https://www.inaturalist.org/observations/298939818",
-      "width": 2048
-    },
-    {
       "attribution": "(c) Nathan Ruser, some rights reserved (CC BY)",
-      "filename": "04-425412548.jpg",
+      "filename": "02-425412548.jpg",
       "height": 1366,
       "image_url": "https://inaturalist-open-data.s3.amazonaws.com/photos/425412548/large.jpg",
       "license_code": "cc-by",
@@ -136,6 +117,32 @@
       "photo_id": 425412548,
       "sha256": "cc089b45db670cb682372373324e492467d0ed8805051deed4d375602f38a1c1",
       "source_url": "https://www.inaturalist.org/observations/238909644",
+      "width": 2048
+    },
+    {
+      "attribution": "no rights reserved",
+      "filename": "03-151605045.jpg",
+      "height": 2048,
+      "image_url": "https://inaturalist-open-data.s3.amazonaws.com/photos/151605045/large.jpg",
+      "license_code": "cc0",
+      "observation_id": 91632451,
+      "observer": "ohmspectator",
+      "photo_id": 151605045,
+      "sha256": "4851f2327ae6d3dd8695da0eb619c9550fdf5c5791aee57c649293ef1cc07201",
+      "source_url": "https://www.inaturalist.org/observations/91632451",
+      "width": 1084
+    },
+    {
+      "attribution": "(c) Donald Davesne, some rights reserved (CC BY)",
+      "filename": "04-366973757.jpg",
+      "height": 1361,
+      "image_url": "https://inaturalist-open-data.s3.amazonaws.com/photos/366973757/large.jpg",
+      "license_code": "cc-by",
+      "observation_id": 207472477,
+      "observer": "donalddavesne",
+      "photo_id": 366973757,
+      "sha256": "7db79f48ac2c41b95675476a24a3db5a8c1a0418a170901b4f02467b2623349d",
+      "source_url": "https://www.inaturalist.org/observations/207472477",
       "width": 2048
     }
   ],
