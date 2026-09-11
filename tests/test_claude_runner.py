@@ -152,7 +152,7 @@ class FontAndCompositeTests(unittest.TestCase):
     def test_bundled_font_is_the_default(self) -> None:
         path = label_font_path()
         assert path is not None
-        self.assertEqual(path.name, "RockSalt.ttf")
+        self.assertEqual(path.name, "SpecialElite-Regular.ttf")
         self.assertTrue(path.is_file())
 
     def test_env_override_wins_when_it_exists(self) -> None:

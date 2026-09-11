@@ -80,11 +80,14 @@ SPECTRA6_PALETTE: Final[tuple[tuple[int, int, int], ...]] = (
 # Pure black is a native panel pigment and renders crisply; a warm brown ink
 # would dither into black/red/yellow speckle around letterforms.
 INK_COLOR: Final = (0, 0, 0)
-# One fixed font on every plate. The bundled default can be overridden with the
-# INKY_BIRD_LABEL_FONT environment variable (an absolute .ttf path) so candidate
-# faces can be compared on the same illustration without a code change.
+# One fixed font on every plate: Special Elite (Apache-2.0), an old typewriter
+# face chosen against handwriting and monospace candidates on a real plate. The
+# bundled default can be overridden with the INKY_BIRD_LABEL_FONT environment
+# variable (an absolute .ttf path) so faces can be compared without a code change.
 LABEL_FONT_ENV: Final = "INKY_BIRD_LABEL_FONT"
-BUNDLED_LABEL_FONT: Final = Path(__file__).resolve().parent / "assets" / "fonts" / "RockSalt.ttf"
+BUNDLED_LABEL_FONT: Final = (
+    Path(__file__).resolve().parent / "assets" / "fonts" / "SpecialElite-Regular.ttf"
+)
 _FALLBACK_FONTS: Final[tuple[str, ...]] = (
     "/usr/share/fonts/truetype/dejavu/DejaVuSerif.ttf",
     "/System/Library/Fonts/Supplemental/Georgia.ttf",
