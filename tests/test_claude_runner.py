@@ -320,10 +320,11 @@ class FontAndCompositeTests(unittest.TestCase):
         for y in range(500, 700):  # a tail sweeping deep into the column
             free[y] = column_width * 2 // 5
         body_size = max(width // 44, 10)
-        placed, complete = _flow_lines(
+        placed, complete, broken = _flow_lines(
             draw, profile, _label_font(body_size), body_size, free, column_width, 300, height
         )
         self.assertTrue(complete)
+        self.assertFalse(broken)
         text = " ".join(line.strip("\u2022 ") for _, line in placed)
         for mark in profile["field_marks"]:
             self.assertIn(mark, text)  # every word of every mark is on the page, in order
@@ -407,7 +408,8 @@ class FontAndCompositeTests(unittest.TestCase):
             "Often perches on the backs of grazing animals or other prominent lookouts "
             "while hunting insects"
         ]
-        profile["measurements"] = {"length": "19 cm", "wingspan": "21 cm", "weight": "20 g"}
+        # No figures, so no measurement block: the field mark starts at start_y.
+        profile["measurements"] = {"length": "u", "wingspan": "u", "weight": "u"}
         draw = ImageDraw.Draw(Image.new("RGB", PORTRAIT_SIZE, PAPER_COLOR))
         width, height = PORTRAIT_SIZE
         column_width = width * 3 // 10
@@ -419,10 +421,13 @@ class FontAndCompositeTests(unittest.TestCase):
         for y in band:  # a tail sweeping almost the whole way across the column
             free[y] = column_width // 8
 
-        placed, complete = _flow_lines(
-            draw, profile, _label_font(body_size), body_size, free, column_width, 300, height
+        # The mark starts just above the band, so it must break across it.
+        placed, complete, broken = _flow_lines(
+            draw, profile, _label_font(body_size), body_size, free, column_width, 620, height
         )
         self.assertTrue(complete)
+        self.assertTrue(broken)  # the deep band splits the one field mark in two
+        self.assertTrue(any(y >= 900 for y, _ in placed), placed)  # it resumes below the band
         font = _label_font(body_size)
         for y, line in placed:
             room = min(free[y : y + line_height * 3 // 2] or [column_width])

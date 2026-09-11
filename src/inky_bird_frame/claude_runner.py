@@ -262,6 +262,40 @@ def _describe_line(image: Any, axis: str, start: int, end: int, span: float) -> 
     )
 
 
+# The labels are composited into the left third, so the illustration has to stay
+# out of it. A tail or wing crossing the column leaves the text nowhere to go:
+# it must either be written over the artwork or step around it, and both look
+# worse than simply drawing the bird where the prompt asked.
+COLUMN_CLEAR_FRACTION: Final = 0.70
+
+
+def label_column_intrusion(image: Any) -> tuple[str, ...]:
+    """Describe artwork reaching into the label column, measured for the correction note.
+
+    Whether an intrusion actually matters is decided by the layout, not by a
+    threshold here: text that narrows around a tail and keeps reading is fine,
+    text that has to break an item across the obstruction is not.
+    """
+    width, height = image.size
+    margin = max(width // 20, 24)
+    column_width = width * 3 // 10
+    free = _ink_profile(image, margin, column_width)
+    band = free[margin + height // 8 : height * 7 // 10]
+    if not band:
+        return ()
+    narrowest = min(band)
+    deep = sum(1 for value in band if value < column_width * COLUMN_CLEAR_FRACTION)
+    return (
+        f"The illustration reaches into the reserved label column: {deep * 100 // len(band)}% of "
+        f"that area is blocked and at its worst only {narrowest * 100 // column_width}% of the "
+        "column is left clear, so the labels have nowhere to sit. Keep the left third of the "
+        "page above the bottom quarter completely clear of the bird, its tail, its wings and any "
+        "branch or foliage. Move the whole bird right and, if the lower left looks empty, fill it "
+        "with the bottom-quarter row of studies rather than by letting the bird drift into the "
+        "text area.",
+    )
+
+
 def drawn_page_lines(image: Any) -> tuple[str, ...]:
     """Describe long straight lines drawn across the page (dividers, creases, card edges)."""
     _, runs = _page_line_scan(image)
@@ -403,7 +437,7 @@ def _free_width(free: list[int], y0: int, y1: int, column_width: int) -> int:
     return min(min(band) if band else column_width, column_width)
 
 
-def composite_plate_labels(image: Any, profile: SpeciesProfileData) -> None:
+def composite_plate_labels(image: Any, profile: SpeciesProfileData) -> bool:
     """Draw the factual labels onto a text-free illustration, in place.
 
     The illustration prompt reserves the left third and top margin for these
@@ -443,11 +477,11 @@ def composite_plate_labels(image: Any, profile: SpeciesProfileData) -> None:
         block_top = (
             margin + int(title_size * 1.25) + int(subtitle_size * 1.3) + int(body_size * 2.4)
         )
-        placed, complete = _flow_lines(
+        placed, complete, broken = _flow_lines(
             draw, profile, body_font, body_size, free, column_width, block_top, label_floor
         )
         fits_lines = _measurements_fit(draw, profile, body_font, column_width)
-        if complete and (fits_lines or body_size <= consistent_body):
+        if complete and not broken and (fits_lines or body_size <= consistent_body):
             break
         if body_size <= minimum_body:
             break  # at the minimum face, trailing lines are dropped rather than the band crossed
@@ -461,6 +495,7 @@ def composite_plate_labels(image: Any, profile: SpeciesProfileData) -> None:
     draw.text((margin, y), f"Family {profile['family']}", font=body_font, fill=INK_COLOR)
     for line_y, line in placed:
         draw.text((margin, line_y), line, font=body_font, fill=INK_COLOR)
+    return complete and not broken
 
 
 def _flow_lines(
@@ -472,8 +507,8 @@ def _flow_lines(
     column_width: int,
     start_y: int,
     floor: int,
-) -> tuple[list[tuple[int, str]], bool]:
-    """Lay the body text out around the illustration; (placed (y, line) pairs, all placed?).
+) -> tuple[list[tuple[int, str]], bool, bool]:
+    """Lay the body text out; (placed (y, line) pairs, all placed?, broken across a gap?).
 
     Each line is filled with as many words as fit in the width actually free of
     ink at its own height, so a tail or wing sweeping into the column narrows
@@ -486,6 +521,7 @@ def _flow_lines(
     # Narrower than this reads as a ragged dribble, so the band is skipped instead.
     narrowest = max(column_width * 2 // 5, body_size * 4)
     placed: list[tuple[int, str]] = []
+    broken = False
     y = start_y
 
     def usable_width(height: int) -> int:
@@ -506,7 +542,7 @@ def _flow_lines(
     for index, lines in enumerate(measurements):
         for line in lines:
             if y + line_height > floor:
-                return placed, False
+                return placed, False, broken
             placed.append((y, line))
             y += line_height
         if index == len(measurements) - 1:
@@ -516,9 +552,13 @@ def _flow_lines(
         remaining = mark.split()
         first = True
         while remaining:
-            y = next_usable(y, narrowest)
+            stepped = next_usable(y, narrowest)
+            # Stepping past an obstruction between the lines of one item strands
+            # the rest of that sentence below a gap; the caller treats it as a defect.
+            broken = broken or (stepped != y and not first)
+            y = stepped
             if y + line_height > floor:
-                return placed, False
+                return placed, False, broken
             room = usable_width(y) - body_size
             words = [remaining.pop(0)]
             while remaining:
@@ -530,7 +570,7 @@ def _flow_lines(
             placed.append((y, prefix + " ".join(words)))
             y += line_height
             first = False
-    return placed, True
+    return placed, True, broken
 
 
 # Measurement qualifiers are abbreviated so they read as tidy field notes rather
@@ -1145,20 +1185,28 @@ class ClaudeRunner:
         # Objective house-style check on the text-free page: a drawn rule, fold,
         # or panel edge fails the attempt here, before the paid review, and the
         # findings go back to the image model as the correction.
+        laid_out_cleanly = True
         erased = erase_page_lines(plate)
         if erased:
             with log_path.open("a", encoding="utf-8") as handle:
                 handle.write(
                     "\n\nPAGE LINES ERASED:\n" + "\n".join(f"- {d}" for d in erased) + "\n"
                 )
-        defects = drawn_page_lines(plate)
+        defects = drawn_page_lines(plate) + label_column_intrusion(plate)
         if defects:
             with log_path.open("a", encoding="utf-8") as handle:
                 handle.write(
                     "\n\nPAGE CHECK FAILED:\n" + "\n".join(f"- {d}" for d in defects) + "\n"
                 )
             raise PageDefectError(defects)
-        composite_plate_labels(plate, profile)
+        laid_out_cleanly = composite_plate_labels(plate, profile)
+        if not laid_out_cleanly:
+            # The labels could not be laid out beside this drawing without breaking
+            # a sentence across the artwork or running out of column.
+            intrusion = label_column_intrusion(plate)
+            with log_path.open("a", encoding="utf-8") as handle:
+                handle.write("\n\nLAYOUT FAILED:\n" + "\n".join(f"- {d}" for d in intrusion) + "\n")
+            raise PageDefectError(intrusion)
         output_path.parent.mkdir(parents=True, exist_ok=True)
         plate.save(output_path, format="PNG")
         if not output_path.is_file() or output_path.stat().st_size == 0:
