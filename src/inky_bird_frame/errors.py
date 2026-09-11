@@ -51,3 +51,11 @@ class GenerationError(InkyBirdFrameError):
 
 class QualityReviewError(GenerationError):
     """Raised when a species exhausts its automated visual-review attempts."""
+
+
+class PageDefectError(GenerationError):
+    """Raised when a rendered page fails an objective house-style check before review."""
+
+    def __init__(self, findings: tuple[str, ...]) -> None:
+        super().__init__("; ".join(findings) or "page failed the objective house-style check")
+        self.findings = findings

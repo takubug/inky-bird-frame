@@ -40,6 +40,7 @@ from inky_bird_frame.errors import (
     DataSourceError,
     GenerationError,
     InsufficientReferencesError,
+    PageDefectError,
     QualityReviewError,
     SpeciesStateError,
 )
@@ -740,9 +741,7 @@ class ControllerTests(unittest.TestCase):
             # The start-of-cycle sweep must not publish it, and it must still be pending.
             self.assertEqual(result["published_pending"], [])
             self.assertTrue((candidate / "manifest.json").is_file())
-            self.assertEqual(
-                list((config.controller.catalog_dir / "species").glob("9083-*")), []
-            )
+            self.assertEqual(list((config.controller.catalog_dir / "species").glob("9083-*")), [])
 
     def test_cycle_publishes_a_previously_reviewed_pending_candidate(self) -> None:
         species = BirdSpecies(9083, "Northern Cardinal", "Cardinalis cardinalis", 2, "test")
@@ -958,6 +957,84 @@ class ControllerTests(unittest.TestCase):
         self.assertEqual(manifest["status"], "pending")
         self.assertFalse((candidate / "attempt-history.json").exists())
         self.assertEqual(len(private_histories), 1)
+
+    def test_page_defect_skips_review_and_feeds_findings_back_as_corrections(self) -> None:
+        species = BirdSpecies(9083, "Northern Cardinal", "Cardinalis cardinalis", 2, "test")
+        passed_review = QualityReview(
+            True,
+            5,
+            4,
+            5,
+            5,
+            True,
+            (),
+            (
+                {"title": "Cornell", "url": "https://www.allaboutbirds.org/example"},
+                {"title": "Audubon", "url": "https://www.audubon.org/example"},
+            ),
+        )
+        defect = ("A drawn vertical line runs across 70% of the page at 25% of the width",)
+
+        class FakeRunner:
+            generator_label = "fake-runner"
+            corrections: list[tuple[str, ...]] = []
+            reviews = 0
+
+            def __init__(self, _executable: Path, workspace: Path) -> None:
+                self.workspace = workspace.resolve()
+
+            def create_profile(self, *_args: object, **_kwargs: object) -> SpeciesProfileData:
+                output_path = _args[-2]
+                assert isinstance(output_path, Path)
+                output_path.write_text(json.dumps(PROFILE))
+                return PROFILE
+
+            def generate_plate(self, *_args: object) -> Path:
+                output_path = _args[-3]
+                correction = _args[-1]
+                assert isinstance(output_path, Path)
+                assert isinstance(correction, tuple)
+                self.corrections.append(correction)
+                if len(self.corrections) == 1:
+                    raise PageDefectError(defect)
+                output_path.write_bytes(b"generated")
+                return output_path
+
+            def review_plate(self, *_args: object, **_kwargs: object) -> QualityReview:
+                FakeRunner.reviews += 1
+                return passed_review
+
+        def prepare(_source: Path, portrait: Path, display: Path) -> None:
+            portrait.write_bytes(b"portrait")
+            display.write_bytes(b"display")
+
+        with TemporaryDirectory() as temporary:
+            config_path = Path(temporary) / "config.toml"
+            config_path.write_text(
+                CONFIG.replace('workspace_dir = "."', 'workspace_dir = "workspace"')
+            )
+            config = load_config(config_path)
+            config.controller.workspace_dir.mkdir()
+            with (
+                patch("inky_bird_frame.controller.load_or_fetch_references", return_value=[]),
+                patch("inky_bird_frame.controller.fetch_taxon_context"),
+                patch("inky_bird_frame.controller.CodexRunner", FakeRunner),
+                patch("inky_bird_frame.controller.prepare_generated_plate", side_effect=prepare),
+            ):
+                candidate = generate_candidate(config, species, config.controller.workspace_dir)
+            manifest = json.loads((candidate / "manifest.json").read_text())
+            history_path = next(
+                (config.controller.state_dir / "runs").glob("*/attempt-history.json")
+            )
+            history = json.loads(history_path.read_text())
+
+        self.assertEqual(FakeRunner.corrections, [(), defect])
+        self.assertEqual(FakeRunner.reviews, 1)
+        self.assertEqual(manifest["generation"]["attempt"], 2)
+        self.assertEqual(
+            history[0], {"attempt": 1, "page_check": {"passed": False, "findings": list(defect)}}
+        )
+        self.assertTrue(history[1]["quality_review"]["passed"])
 
     def test_runtime_generation_failure_remains_eligible(self) -> None:
         species = BirdSpecies(9083, "Northern Cardinal", "Cardinalis cardinalis", 2, "test")

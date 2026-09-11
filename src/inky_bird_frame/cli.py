@@ -295,7 +295,7 @@ def generate_command(args: argparse.Namespace) -> int:
                 body=(
                     f"A new {common_name} plate passed automated review and is waiting for "
                     f"you. Approve: inky-bird-frame approve {taxon_id}. "
-                    f"Reject: inky-bird-frame reject {taxon_id} --reason \"...\"."
+                    f'Reject: inky-bird-frame reject {taxon_id} --reason "...".'
                 ),
                 attachment=portrait if isinstance(portrait, str) else None,
             )

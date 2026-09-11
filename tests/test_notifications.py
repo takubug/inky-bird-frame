@@ -132,8 +132,14 @@ class NotificationTests(unittest.TestCase):
 
         now = datetime.now(UTC)
         item = NotificationItem(
-            item_id="x", event=NotificationEvent.DISCOVERY, title="t", body="b",
-            created_at=now, attempts=0, next_attempt_at=now, delivered_to=(),
+            item_id="x",
+            event=NotificationEvent.DISCOVERY,
+            title="t",
+            body="b",
+            created_at=now,
+            attempts=0,
+            next_attempt_at=now,
+            delivered_to=(),
             attachment="/tmp/plate.png",
         )
         with TemporaryDirectory() as temporary:

@@ -103,6 +103,11 @@ class IllustrationPromptTests(unittest.TestCase):
         self.assertIn("six-color e-paper", prompt)
         self.assertIn("avoid soft gradients", prompt)
 
+    def test_prompt_leaves_the_reserved_label_area_unmarked(self) -> None:
+        prompt = illustration_prompt(_species(), _profile(), [_reference()])
+        self.assertIn("That reserved area has no visible\nboundary of any kind", prompt)
+        self.assertIn("do not draw a header rule beneath the top band", prompt)
+
     def test_prompt_specifies_plain_old_paper(self) -> None:
         prompt = illustration_prompt(_species(), _profile(), [_reference()])
         self.assertIn("slightly yellowed cream", prompt)
@@ -208,6 +213,43 @@ class FontAndCompositeTests(unittest.TestCase):
             for line in _measurement_lines(draw, profile, _label_font(size), width * 3 // 10)[1]:
                 self.assertEqual(line.count("("), line.count(")"), line)
 
+    def test_measurements_without_a_figure_are_left_off_the_plate(self) -> None:
+        from inky_bird_frame.claude_runner import _measurement_specs
+
+        profile = _profile()
+        profile["measurements"]["wingspan"] = "not well documented"
+        self.assertEqual(
+            [label for label, _, _ in _measurement_specs(profile)], ["Length", "Weight"]
+        )
+
+    def test_drawn_page_lines_flags_thin_rules_but_not_clean_paper_or_broad_shapes(self) -> None:
+        from PIL import Image, ImageDraw
+
+        from inky_bird_frame.claude_runner import drawn_page_lines
+
+        clean = Image.new("RGB", PORTRAIT_SIZE, PAPER_COLOR)
+        self.assertEqual(drawn_page_lines(clean), ())
+
+        ruled = clean.copy()
+        draw = ImageDraw.Draw(ruled)
+        draw.line([(300, 0), (300, 1100)], fill=(150, 140, 120), width=2)  # column rule, 69% tall
+        draw.line([(300, 320), (1180, 320)], fill=(150, 140, 120), width=1)  # header rule, 73% wide
+        findings = drawn_page_lines(ruled)
+        self.assertEqual(len(findings), 2, findings)
+        self.assertIn("vertical line runs across 69% of the page at 25% of the width", findings[0])
+        self.assertIn(
+            "horizontal line runs across 73% of the page at 20% of the height", findings[1]
+        )
+        self.assertIn("Draw no line, rule, fold, crease, border, or panel edge", findings[0])
+
+        broad = clean.copy()
+        ImageDraw.Draw(broad).rectangle([(500, 0), (560, 1599)], fill=(40, 40, 40))  # a dark bar
+        self.assertEqual(drawn_page_lines(broad), ())
+
+        edge = clean.copy()
+        ImageDraw.Draw(edge).line([(2, 0), (2, 1599)], fill=(120, 110, 90), width=3)  # bezel shadow
+        self.assertEqual(drawn_page_lines(edge), ())
+
     def test_a_parenthetical_is_never_split_across_lines(self) -> None:
         from PIL import Image, ImageDraw
 
@@ -231,7 +273,7 @@ class FontAndCompositeTests(unittest.TestCase):
 
         profile = _profile()
         profile["measurements"]["wingspan"] = (
-            "not well documented; proportionate to a small-to-medium honeyeater build"
+            "60\u201370 cm; proportionate to a small-to-medium honeyeater build"
         )
         draw = ImageDraw.Draw(Image.new("RGB", PORTRAIT_SIZE, PAPER_COLOR))
         width = PORTRAIT_SIZE[0]
@@ -240,7 +282,7 @@ class FontAndCompositeTests(unittest.TestCase):
         # The wingspan is trimmed to its leading clause; a lone whole word such as
         # "documented" may end the second line, a fragment may not.
         self.assertLessEqual(len(wrapped[1]), 2)
-        self.assertIn("not well documented", " ".join(wrapped[1]))
+        self.assertIn("60\u201370 cm", " ".join(wrapped[1]))
         self.assertNotIn("proportionate", " ".join(wrapped[1]))
 
     def test_length_and_weight_never_wrap_and_wingspan_takes_at_most_two_lines(self) -> None:
@@ -251,7 +293,7 @@ class FontAndCompositeTests(unittest.TestCase):
         profile = _profile()
         profile["measurements"] = {
             "length": "33\u201337 cm (13\u201314.5 in)",
-            "wingspan": "not well documented in standard references",
+            "wingspan": "45\u201355 cm (17.7\u201321.7 in) in standard references",
             "weight": "approx. 80\u2013120 g",
         }
         image = Image.new("RGB", PORTRAIT_SIZE, PAPER_COLOR)
@@ -359,9 +401,7 @@ class FontAndCompositeTests(unittest.TestCase):
         review = review_prompt_with_preview(_species(), _profile(), [_reference()], ("a.example",))
         self.assertIn("crease running through the label area", review)
         self.assertIn("no boxes, cells, frames, table lines", prompt)
-        self.assertIn(
-            "divider drawn around, between, or beneath the studies", review
-        )
+        self.assertIn("divider drawn around, between, or beneath the studies", review)
 
     def test_labels_are_drawn_in_pure_black_without_resizing(self) -> None:
         from PIL import Image, ImageChops

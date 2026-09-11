@@ -51,6 +51,7 @@ from .errors import (
     InkyBirdFrameError,
     InsufficientReferencesError,
     MissingDependencyError,
+    PageDefectError,
     QualityReviewError,
     SpeciesStateError,
 )
@@ -855,15 +856,27 @@ def generate_candidate(
                 dir=generation_parent,
             ) as generation_temporary:
                 generated_path = Path(generation_temporary) / "generated.png"
-                runner.generate_plate(
-                    species,
-                    profile,
-                    references,
-                    reference_paths,
-                    generated_path,
-                    logs / f"02-generation-attempt-{attempt:02d}.log",
-                    correction_findings,
-                )
+                try:
+                    runner.generate_plate(
+                        species,
+                        profile,
+                        references,
+                        reference_paths,
+                        generated_path,
+                        logs / f"02-generation-attempt-{attempt:02d}.log",
+                        correction_findings,
+                    )
+                except PageDefectError as defect:
+                    # Objective house-style failure: skip the paid review and
+                    # hand the concrete findings straight back as corrections.
+                    history.append(
+                        {
+                            "attempt": attempt,
+                            "page_check": {"passed": False, "findings": list(defect.findings)},
+                        }
+                    )
+                    correction_findings = defect.findings
+                    continue
                 prepare_generated_plate(generated_path, portrait_path, display_path)
 
             review = runner.review_plate(
@@ -1004,9 +1017,7 @@ def run_generation_cycle(config: AppConfig) -> dict[str, object]:
             try:
                 guidance = retry_store.quality_guidance(species.taxon_id)
                 if guidance is None:
-                    candidate = generate_candidate(
-                        config, species, config.controller.workspace_dir
-                    )
+                    candidate = generate_candidate(config, species, config.controller.workspace_dir)
                 else:
                     candidate = generate_candidate(
                         config,

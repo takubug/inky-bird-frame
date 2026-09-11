@@ -616,9 +616,7 @@ def _deliver(destination: NotificationDestination, item: NotificationItem) -> No
         # whole message, so fall back to text: the gate must still ring.
         if notifier.notify(title=item.title, body=item.body, attach=item.attachment) is True:
             return
-        logger.warning(
-            "attachment refused for notification %s; delivering text only", item.item_id
-        )
+        logger.warning("attachment refused for notification %s; delivering text only", item.item_id)
         body = f"{item.body}\n(The plate image could not be attached to this message.)"
         result = notifier.notify(title=item.title, body=body)
     else:

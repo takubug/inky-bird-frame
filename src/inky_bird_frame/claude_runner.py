@@ -33,7 +33,7 @@ from .codex_runner import (
     _parse_review,
     parse_species_profile,
 )
-from .errors import GenerationError, MissingDependencyError
+from .errors import GenerationError, MissingDependencyError, PageDefectError
 from .images import PORTRAIT_SIZE
 from .models import QualityReview, ReferencePhoto, SpeciesProfileData
 from .prompts import profile_prompt, reference_list
@@ -180,8 +180,79 @@ Typography is composited separately by software. Do not render any letters, nume
 labels, captions, or handwriting anywhere on the page. Keep the left third of the page above
 the bottom quarter, and the top margin band (roughly the top eighth), as quiet, blank paper: no
 bird, no studies, no swatches, no wash, and no stray marks there, so the labels composited
-afterward sit on bare paper and never touch the artwork.
+afterward sit on bare paper and never touch the artwork. That reserved area has no visible
+boundary of any kind: do not draw a vertical or horizontal line, rule, fold, crease, or panel
+edge to mark it off from the drawing, and do not draw a header rule beneath the top band. The
+paper runs continuously and unmarked across the whole sheet.
 """
+
+
+# A drawn rule, fold, or panel edge is a thin ink line that stays within a
+# 3-pixel band while it crosses at least this fraction of the page, with clean
+# paper a few pixels to either side. Bird outlines and hatching are broader,
+# shorter, or flanked by more ink, so they do not reach the threshold.
+PAGE_LINE_MIN_SPAN: Final = 0.40
+PAGE_LINE_INK_DEPTH: Final = 4
+PAGE_LINE_CLEARANCE: Final = 5
+PAGE_LINE_EDGE: Final = 6
+
+
+def drawn_page_lines(image: Any) -> tuple[str, ...]:
+    """Describe long straight lines drawn across the page (dividers, creases, card edges)."""
+    from PIL import Image as PILImage
+    from PIL import ImageChops, ImageFilter
+
+    grey = image.convert("L")
+    paper = grey.filter(ImageFilter.GaussianBlur(6))
+    ink = ImageChops.subtract(paper, grey).point(
+        lambda value: 255 if value > PAGE_LINE_INK_DEPTH else 0
+    )
+    band = ink.filter(ImageFilter.MaxFilter(3))
+    width, height = grey.size
+    findings: list[str] = []
+    for axis, (dx, dy) in (
+        ("vertical", (PAGE_LINE_CLEARANCE, 0)),
+        ("horizontal", (0, PAGE_LINE_CLEARANCE)),
+    ):
+        flank = ImageChops.lighter(ImageChops.offset(ink, dx, dy), ImageChops.offset(ink, -dx, -dy))
+        thin = ImageChops.subtract(band, flank)
+        if axis == "vertical":
+            profile_image = thin.resize((width, 1), PILImage.Resampling.BOX)
+            extent = width
+        else:
+            profile_image = thin.resize((1, height), PILImage.Resampling.BOX)
+            extent = height
+        spans = [float(value) for value in profile_image.tobytes()]
+        # The outermost pixels sit under the frame bezel; a dark edge column there
+        # is a scan artefact, not a drawn border.
+        hits = [
+            index
+            for index, value in enumerate(spans)
+            if value >= PAGE_LINE_MIN_SPAN * 255
+            and PAGE_LINE_EDGE <= index < extent - PAGE_LINE_EDGE
+        ]
+        for start, end in _runs(hits):
+            middle = (start + end) // 2
+            span = max(spans[index] for index in range(start, end + 1)) / 255
+            findings.append(
+                f"A drawn {axis} line runs across {span:.0%} of the page at "
+                f"{middle * 100 // extent}% of the {'width' if axis == 'vertical' else 'height'}"
+                " (a column rule, fold, crease, divider, or card edge). Draw no line, rule,"
+                " fold, crease, border, or panel edge anywhere; the paper is one continuous"
+                " unmarked sheet and the reserved label area has no visible boundary."
+            )
+    return tuple(findings)
+
+
+def _runs(indices: list[int]) -> list[tuple[int, int]]:
+    """Group sorted indices into (start, end) runs of adjacent values."""
+    runs: list[tuple[int, int]] = []
+    for index in indices:
+        if runs and index <= runs[-1][1] + 2:
+            runs[-1] = (runs[-1][0], index)
+        else:
+            runs.append((index, index))
+    return runs
 
 
 def _label_font(size: int) -> Any:
@@ -366,11 +437,14 @@ _MEASUREMENT_ABBREVIATIONS: Final[tuple[tuple[str, str], ...]] = (
 def _measurement_specs(profile: SpeciesProfileData) -> list[tuple[str, str, int]]:
     """(label, value, maximum lines): length and weight sit on one line, wingspan may take two."""
     measurements = profile["measurements"]
-    return [
+    specs = [
         ("Length", measurements["length"], 1),
         ("Wingspan", measurements["wingspan"], 2),
         ("Weight", measurements["weight"], 1),
     ]
+    # A value without a figure ("not well documented") is a research note, not
+    # a measurement; leaving it off reads better than two lines of apology.
+    return [spec for spec in specs if any(char.isdigit() for char in spec[1])]
 
 
 _TRAILING_FLUFF = re.compile(
@@ -932,6 +1006,16 @@ class ClaudeRunner:
         raw_path = log_path.with_name(f"{log_path.stem}-raw.png")
         raw_path.parent.mkdir(parents=True, exist_ok=True)
         plate.save(raw_path, format="PNG")
+        # Objective house-style check on the text-free page: a drawn rule, fold,
+        # or panel edge fails the attempt here, before the paid review, and the
+        # findings go back to the image model as the correction.
+        defects = drawn_page_lines(plate)
+        if defects:
+            with log_path.open("a", encoding="utf-8") as handle:
+                handle.write(
+                    "\n\nPAGE CHECK FAILED:\n" + "\n".join(f"- {d}" for d in defects) + "\n"
+                )
+            raise PageDefectError(defects)
         composite_plate_labels(plate, profile)
         output_path.parent.mkdir(parents=True, exist_ok=True)
         plate.save(output_path, format="PNG")
