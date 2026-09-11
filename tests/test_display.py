@@ -98,7 +98,28 @@ class PanelSettleTests(unittest.TestCase):
         waited = wait_for_panel_idle(
             object(), timeout=60, is_busy=lambda: next(states), sleep=sleep, clock=clock
         )
-        self.assertAlmostEqual(waited, 1.5)
+        # Three busy readings: the first is consumed while waiting for BUSY to rise
+        # (no sleep), then two polls of 0.5 s before it clears.
+        self.assertAlmostEqual(waited, 1.0)
+
+    def test_waits_for_busy_to_rise_before_trusting_idle(self) -> None:
+        # Idle for the first second, busy for the next three, then clear.
+        states = iter([False, False, True, True, True, False])
+        now, sleep, clock = self._fake_time()
+        waited = wait_for_panel_idle(
+            object(), timeout=60, is_busy=lambda: next(states), sleep=sleep, clock=clock
+        )
+        # Two idle polls (1.0 s) until BUSY rises, then two busy polls (1.0 s) until it clears.
+        self.assertAlmostEqual(waited, 2.0)
+
+    def test_holds_a_full_refresh_when_busy_never_rises(self) -> None:
+        from inky_bird_frame.display import PANEL_MINIMUM_HOLD_SECONDS
+
+        now, sleep, clock = self._fake_time()
+        waited = wait_for_panel_idle(
+            object(), timeout=60, is_busy=lambda: False, sleep=sleep, clock=clock
+        )
+        self.assertGreaterEqual(waited, PANEL_MINIMUM_HOLD_SECONDS)
 
     def test_warns_and_stops_at_the_cap_when_busy_never_clears(self) -> None:
         now, sleep, clock = self._fake_time()

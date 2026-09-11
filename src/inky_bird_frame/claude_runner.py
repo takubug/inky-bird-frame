@@ -160,10 +160,13 @@ Style and composition:
 - Fine graphite and confident ink linework with restrained transparent watercolor.
 - Bold, crisp, high-contrast lines and flat watercolor washes that survive a six-color e-paper
   panel; avoid soft gradients, airbrushed shading, and low-contrast detail.
-- One full-body bird, large and centered-right, in a natural perched posture.
-- Beneath the bird, in the lower-right region only, exactly three small elements: one
-  wing-pattern study, one bill/head study, and one row of unlabeled color swatches. No other
-  figures, studies, or flight poses anywhere, and nothing at all in the lower-left of the page.
+- One full-body bird, large, filling the middle and right of the page in a natural perched
+  posture; it may reach down toward the bottom band but must not enter the left third above it.
+- Along the bottom quarter of the page, as one row from left to right spanning the full width:
+  one wing-pattern study, one bill/head study, and one row of unlabeled color swatches. Exactly
+  those three elements, kept inside the bottom quarter; no other figures, studies, or flight
+  poses anywhere.
+- Fill the page: no large empty regions apart from the reserved label area described below.
 - No ruler, scale bar, tick marks, or measurement marks of any kind, anywhere on the page.
 - It should look like a carefully scanned scientific field-journal page, not Audubon, not a
   decorative poster, not a collage, and not photorealistic.
@@ -171,10 +174,10 @@ Style and composition:
 - Exactly one bird, one head, one beak, two wings, two legs, and one tail. Feet must be plausible.
 
 Typography is composited separately by software. Do not render any letters, numerals, words,
-labels, captions, or handwriting anywhere on the page. Keep the entire left third of the page,
-from the very top to the very bottom, and the top margin band (roughly the top eighth) as quiet,
-blank paper: no bird, no studies, no swatches, no wash, and no stray marks there, so the labels
-composited afterward sit on bare paper and never touch the artwork.
+labels, captions, or handwriting anywhere on the page. Keep the left third of the page above
+the bottom quarter, and the top margin band (roughly the top eighth), as quiet, blank paper: no
+bird, no studies, no swatches, no wash, and no stray marks there, so the labels composited
+afterward sit on bare paper and never touch the artwork.
 """
 
 
@@ -419,7 +422,9 @@ and set passed=false if any of these appear: any letters, numerals, words, or ha
 by the image model (anything not in the composited label column); any ruler, scale bar, tick
 marks, or measurement marks; a visible notebook binding, spiral, spine, or gutter; a torn, curled,
 or aged page edge; stains, foxing, or heavy ageing marks on the paper; or the bird or any study
-placed inside a drawn border, inset panel, or pasted card.
+placed inside a drawn border, inset panel, or pasted card. Also lower composition_quality for a
+poorly filled page: a large empty region (for example a blank lower-left corner beneath a short
+label column) or a bird drawn small in a sea of paper reads as unfinished.
 
 Set passed=true only when all four scores are at least 4, location_free is true, the bird has
 exactly one head, one beak, two wings, two legs, and one tail, and there are no material species or

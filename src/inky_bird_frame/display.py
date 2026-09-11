@@ -23,6 +23,11 @@ logger = logging.getLogger(__name__)
 # until the panel is genuinely idle before reporting the update as sent.
 PANEL_SETTLE_TIMEOUT_SECONDS = 300.0
 PANEL_SETTLE_POLL_SECONDS = 0.5
+# The BUSY line rises only a moment after the refresh command; a poll that
+# starts immediately can see "idle" before the refresh has begun. Give it this
+# long to rise, and if it never does, hold for a full refresh anyway.
+PANEL_BUSY_RISE_SECONDS = 5.0
+PANEL_MINIMUM_HOLD_SECONDS = 45.0
 
 
 class InkyDisplay(Protocol):
@@ -137,6 +142,20 @@ def wait_for_panel_idle(
         return 0.0
     start = clock()
     try:
+        # Phase 1: wait for the refresh to actually start (BUSY rises).
+        seen_busy = False
+        while clock() - start < PANEL_BUSY_RISE_SECONDS:
+            if probe():
+                seen_busy = True
+                break
+            sleep(PANEL_SETTLE_POLL_SECONDS)
+        if not seen_busy:
+            # No signal: assume a refresh is running unobserved and hold for one.
+            logger.warning("panel BUSY never rose; holding %.0fs", PANEL_MINIMUM_HOLD_SECONDS)
+            while clock() - start < PANEL_MINIMUM_HOLD_SECONDS:
+                sleep(PANEL_SETTLE_POLL_SECONDS)
+            return clock() - start
+        # Phase 2: wait for it to finish (BUSY clears).
         while probe():
             if clock() - start >= timeout:
                 warnings.warn(

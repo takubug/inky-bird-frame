@@ -242,11 +242,16 @@ class FontAndCompositeTests(unittest.TestCase):
             "label text entered the bottom 30% reserved for the studies",
         )
 
-    def test_prompt_confines_studies_to_the_lower_right(self) -> None:
+    def test_prompt_puts_studies_in_a_full_width_bottom_band(self) -> None:
         prompt = illustration_prompt(_species(), _profile(), [_reference()])
-        self.assertIn("lower-right region only, exactly three", prompt)
-        self.assertIn("nothing at all in the lower-left", prompt)
-        self.assertIn("from the very top to the very bottom", prompt)
+        self.assertIn("bottom quarter of the page", prompt)
+        self.assertIn("spanning the full width", prompt)
+        self.assertIn("Fill the page", prompt)
+        self.assertIn("left third of the page above\nthe bottom quarter", prompt)
+
+    def test_review_penalises_empty_regions(self) -> None:
+        prompt = review_prompt_with_preview(_species(), _profile(), [_reference()], ("a.example",))
+        self.assertIn("poorly filled page", prompt)
 
     def test_labels_are_drawn_in_pure_black_without_resizing(self) -> None:
         from PIL import Image, ImageChops
