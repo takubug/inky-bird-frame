@@ -711,7 +711,9 @@ class ControllerTests(unittest.TestCase):
         )
         with TemporaryDirectory() as temporary:
             config_path = Path(temporary) / "config.toml"
-            config_path.write_text(CONFIG.replace("require_approval = false", "require_approval = true"))
+            config_path.write_text(
+                CONFIG.replace("require_approval = false", "require_approval = true")
+            )
             config = load_config(config_path)
             self.assertTrue(config.controller.require_approval)
             candidate = candidate_directory(config.controller.state_dir, species)
