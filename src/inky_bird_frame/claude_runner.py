@@ -22,6 +22,7 @@ import base64
 import io
 import json
 import os
+import re
 from pathlib import Path
 from typing import Any, Final
 
@@ -155,8 +156,9 @@ Style and composition:
   with a faint, even pebbled or stippled grain, filling the image edge to edge. It is the only
   background. Render it perfectly flat and straight-on: no marks, stains, foxing, or creases; no
   book or notebook; no binding, spiral, spine, or gutter; no page edges, curl, or shadow; no desk
-  or surface behind it; and no border, inset panel, or pasted card anywhere. Keep the ageing
-  subtle so the paper never competes with the drawing.
+  or surface behind it; no border, inset panel, or pasted card anywhere; and no ruled lines,
+  column rules, folds, or creases drawn across the page. Keep the ageing subtle so the paper
+  never competes with the drawing.
 - Fine graphite and confident ink linework with restrained transparent watercolor.
 - Bold, crisp, high-contrast lines and flat watercolor washes that survive a six-color e-paper
   panel; avoid soft gradients, airbrushed shading, and low-contrast detail.
@@ -291,10 +293,26 @@ def _measurement_specs(profile: SpeciesProfileData) -> list[tuple[str, str, int]
     ]
 
 
+_TRAILING_FLUFF = re.compile(
+    r"[,;]?\s*\(?(approx\.?|approximate(ly)?|est\.?|estimated)\)?\s*$", re.IGNORECASE
+)
+
+
 def _measurement_text(label: str, value: str) -> str:
     for long, short in _MEASUREMENT_ABBREVIATIONS:
         value = value.replace(long, short)
+    # A trailing "approx." adds nothing and tends to dangle alone; drop it.
+    value = _TRAILING_FLUFF.sub("", value).strip()
     return f"{label}: {value}"
+
+
+def _dangles(wrapped: list[str]) -> bool:
+    """True when a multi-line wrap ends in a lone fragment ("in)", "g", "refs")."""
+    if len(wrapped) < 2:
+        return False
+    last = wrapped[-1].strip()
+    words = last.split()
+    return len(words) == 1 and (len(words[0]) < 5 or not words[0][0].isalpha())
 
 
 def _trim_candidates(value: str) -> list[str]:
@@ -314,11 +332,22 @@ def _trim_candidates(value: str) -> list[str]:
 def _fitted_measurement(
     draw: Any, label: str, value: str, limit: int, body_font: Any, column_width: int
 ) -> list[str]:
-    """Wrap a measurement within its line limit, trimming the qualifier before giving up."""
+    """Wrap a measurement within its line limit without a dangling fragment.
+
+    Among the readings of the value (full, then progressively trimmed), take the
+    longest one that fits the limit and does not end in a lone fragment such as
+    "in)" or "g". Trailing "approx." is dropped before any of this.
+    """
+    best: list[str] | None = None
+    best_length = -1
     for candidate in _trim_candidates(value):
         wrapped = _wrapped_lines(draw, _measurement_text(label, candidate), body_font, column_width)
-        if len(wrapped) <= limit:
-            return wrapped
+        if len(wrapped) > limit or _dangles(wrapped):
+            continue
+        if len(candidate) > best_length:
+            best, best_length = wrapped, len(candidate)
+    if best is not None:
+        return best
     return _wrapped_lines(draw, _measurement_text(label, value), body_font, column_width)
 
 
@@ -421,7 +450,8 @@ carrying only the illustration and the composited labels. Score composition_qual
 and set passed=false if any of these appear: any letters, numerals, words, or handwriting painted
 by the image model (anything not in the composited label column); any ruler, scale bar, tick
 marks, or measurement marks; a visible notebook binding, spiral, spine, or gutter; a torn, curled,
-or aged page edge; stains, foxing, or heavy ageing marks on the paper; or the bird or any study
+or aged page edge; stains, foxing, or heavy ageing marks on the paper; a drawn vertical or
+horizontal line, fold, or crease running through the label area; or the bird or any study
 placed inside a drawn border, inset panel, or pasted card. Also lower composition_quality for a
 poorly filled page: a large empty region (for example a blank lower-left corner beneath a short
 label column) or a bird drawn small in a sea of paper reads as unfinished.

@@ -109,7 +109,7 @@ class IllustrationPromptTests(unittest.TestCase):
         self.assertIn("pebbled or stippled grain", prompt)
         self.assertIn("no marks, stains, foxing, or creases", prompt)
         self.assertIn("no binding, spiral, spine, or gutter", prompt)
-        self.assertIn("Keep the ageing\n  subtle", prompt)
+        self.assertIn("Keep the ageing subtle", prompt)
 
     def test_prompt_reserves_the_label_zones(self) -> None:
         prompt = illustration_prompt(_species(), _profile(), [_reference()])
@@ -181,6 +181,26 @@ class FontAndCompositeTests(unittest.TestCase):
             "measurement text overran the label column",
         )
 
+    def test_a_trailing_qualifier_is_dropped_rather_than_dangling(self) -> None:
+        from PIL import Image, ImageDraw
+
+        from inky_bird_frame.claude_runner import _dangles, _label_font, _measurement_lines
+
+        profile = _profile()
+        profile["measurements"]["wingspan"] = "70\u201390 cm (28\u201335 in), approximate"
+        draw = ImageDraw.Draw(Image.new("RGB", PORTRAIT_SIZE, PAPER_COLOR))
+        width = PORTRAIT_SIZE[0]
+        for size in range(max(width // 44, 10), max(width // 70, 8) - 1, -1):
+            wingspan = _measurement_lines(draw, profile, _label_font(size), width * 3 // 10)[1]
+            joined = " ".join(wingspan)
+            self.assertNotIn("approx", joined)
+            self.assertLessEqual(len(wingspan), 2)
+            # A second line may be a whole parenthetical like "(28-35 in)", never "in)".
+            self.assertFalse(_dangles(wingspan), wingspan)
+        # At a face where the inches fit on one line they are kept.
+        small = _measurement_lines(draw, profile, _label_font(18), width * 3 // 10)[1]
+        self.assertEqual(small, ["Wingspan: 70\u201390 cm (28\u201335 in)"])
+
     def test_long_qualifiers_are_trimmed_instead_of_shrinking_the_face(self) -> None:
         from PIL import Image, ImageDraw
 
@@ -194,7 +214,8 @@ class FontAndCompositeTests(unittest.TestCase):
         width = PORTRAIT_SIZE[0]
         default_face = _label_font(max(width // 44, 10))
         wrapped = _measurement_lines(draw, profile, default_face, width * 3 // 10)
-        # At the standard face the wingspan is trimmed to its leading clause and fits.
+        # The wingspan is trimmed to its leading clause; a lone whole word such as
+        # "documented" may end the second line, a fragment may not.
         self.assertLessEqual(len(wrapped[1]), 2)
         self.assertIn("not well documented", " ".join(wrapped[1]))
         self.assertNotIn("proportionate", " ".join(wrapped[1]))
@@ -223,8 +244,15 @@ class FontAndCompositeTests(unittest.TestCase):
             wrapped = _measurement_lines(draw, profile, _label_font(size), column_width)
             satisfied.append([len(w) for w in wrapped])
         self.assertTrue(any(counts == [1, 2, 1] or counts == [1, 1, 1] for counts in satisfied))
-        lengths = [w for w in _measurement_lines(draw, profile, _label_font(16), column_width)]
-        self.assertIn("refs", " ".join(lengths[1]))
+        # No dangling single word on a second line, at any face.
+        for size in range(max(width // 44, 10), max(width // 70, 8) - 1, -1):
+            wingspan = _measurement_lines(draw, profile, _label_font(size), column_width)[1]
+            if len(wingspan) == 2:
+                self.assertGreaterEqual(len(wingspan[1].split()), 2, wingspan)
+        # The abbreviation still applies whenever the full qualifier is kept.
+        from inky_bird_frame.claude_runner import _measurement_text
+
+        self.assertIn("refs", _measurement_text("Wingspan", "in standard references"))
 
     def test_label_block_never_enters_the_bottom_band(self) -> None:
         from PIL import Image
@@ -252,6 +280,12 @@ class FontAndCompositeTests(unittest.TestCase):
     def test_review_penalises_empty_regions(self) -> None:
         prompt = review_prompt_with_preview(_species(), _profile(), [_reference()], ("a.example",))
         self.assertIn("poorly filled page", prompt)
+
+    def test_prompt_and_review_forbid_creases_through_the_labels(self) -> None:
+        prompt = illustration_prompt(_species(), _profile(), [_reference()])
+        self.assertIn("no ruled lines,\n  column rules, folds, or creases", prompt)
+        review = review_prompt_with_preview(_species(), _profile(), [_reference()], ("a.example",))
+        self.assertIn("crease running through the label area", review)
 
     def test_labels_are_drawn_in_pure_black_without_resizing(self) -> None:
         from PIL import Image, ImageChops
