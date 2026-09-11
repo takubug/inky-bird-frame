@@ -261,6 +261,28 @@ class FontAndCompositeTests(unittest.TestCase):
 
         self.assertIn("refs", _measurement_text("Wingspan", "in standard references"))
 
+    def test_paper_grain_does_not_narrow_the_column(self) -> None:
+        import random
+
+        from PIL import Image
+
+        from inky_bird_frame.claude_runner import _ink_profile
+
+        random.seed(7)
+        width, height = PORTRAIT_SIZE
+        image = Image.new("RGB", PORTRAIT_SIZE, PAPER_COLOR)
+        px = image.load()
+        assert px is not None
+        base = PAPER_COLOR
+        for y in range(0, height, 2):  # a faint, even stipple across the whole page
+            for x in range(0, width, 2):
+                d = random.randint(-28, 28)
+                px[x, y] = (base[0] + d, base[1] + d, base[2] + d)
+        margin = max(width // 20, 24)
+        column_width = width * 3 // 10
+        free = _ink_profile(image, margin, column_width)
+        self.assertGreaterEqual(min(free), column_width * 9 // 10)
+
     def test_labels_flow_around_ink_that_intrudes_into_the_column(self) -> None:
         from PIL import Image, ImageDraw
 

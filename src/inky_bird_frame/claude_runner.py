@@ -214,27 +214,41 @@ def _wrapped_lines(draw: Any, text: str, font: Any, max_width: int) -> list[str]
 def _ink_profile(image: Any, margin: int, column_width: int) -> list[int]:
     """Per row, the width (px) free of illustration ink from the margin, capped at the column.
 
-    Measured on the text-free plate: the paper colour is the dominant colour at the
-    top of the label column, and the first pixel in a row that departs from it by
-    more than the paper grain marks where the artwork begins.
+    Measured on the still text-free plate. The paper colour is the per-channel
+    median of the top of the label column (blank on every plate); a row's edge
+    is the first run of three pixels that depart from it strongly, so the
+    paper's stipple grain, which is faint and speckled, does not count as ink.
+    If the blank top band itself reads as busy, the detector is not to be
+    trusted on this plate and the full column is reported everywhere.
     """
     rgb = image.convert("RGB")
     width, height = rgb.size
     span = min(margin + column_width, width)
     strip = rgb.crop((margin, margin, span, margin + max(height // 20, 8)))
-    colours = strip.getcolors(strip.size[0] * strip.size[1]) or [(1, (245, 235, 210))]
-    paper = max(colours)[1]
+    samples = list(strip.getdata())
+    paper = tuple(sorted(px[c] for px in samples)[len(samples) // 2] for c in range(3))
     pixels = rgb.load()
     gap = max(width // 60, 8)
+    threshold = 150
+    run_needed = 3
     free: list[int] = []
     for y in range(height):
         edge = span
+        run = 0
         for x in range(margin, span):
             r, g, b = pixels[x, y][:3]
-            if abs(r - paper[0]) + abs(g - paper[1]) + abs(b - paper[2]) > 90:
-                edge = x
-                break
+            if abs(r - paper[0]) + abs(g - paper[1]) + abs(b - paper[2]) > threshold:
+                run += 1
+                if run >= run_needed:
+                    edge = x - run_needed + 1
+                    break
+            else:
+                run = 0
         free.append(max(edge - margin - gap, 0))
+    top = free[margin : margin + height // 8]
+    busy = sum(1 for value in top if value < column_width * 9 // 10)
+    if top and busy > len(top) * 3 // 10:
+        return [column_width] * height
     return free
 
 
@@ -268,6 +282,10 @@ def composite_plate_labels(image: Any, profile: SpeciesProfileData) -> None:
     width, height = image.size
     margin = max(width // 20, 24)
     column_width = width * 3 // 10
+    # Measure where the illustration intrudes into the column BEFORE any label is
+    # drawn: the detector samples the paper and checks the blank top band, both
+    # of which the title would otherwise contaminate.
+    free = _ink_profile(image, margin, column_width)
     title_size = max(width // 18, 16)
     subtitle_size = max(width // 28, 12)
     title_font = _label_font(title_size)
@@ -312,10 +330,9 @@ def composite_plate_labels(image: Any, profile: SpeciesProfileData) -> None:
     # Flow the body text around the illustration: each item is wrapped to the
     # width actually free of ink where it will sit, so a tail or wing sweeping
     # into the column narrows the lines there instead of being written over.
-    free = _ink_profile(image, margin, column_width)
     narrowest = max(column_width * 2 // 5, body_size * 4)
     for kind, label, value, limit in _label_items(profile):
-        band_width = max(_free_width(free, y, y + line_height * 3, column_width), narrowest)
+        band_width = max(_free_width(free, y, y + line_height * 4, column_width), narrowest)
         if kind == "measurement":
             wrapped = _fitted_measurement(draw, label, value, limit, body_font, band_width)
         else:
@@ -326,7 +343,8 @@ def composite_plate_labels(image: Any, profile: SpeciesProfileData) -> None:
         for line in wrapped:
             if y + line_height > label_floor:
                 return
-            here = max(_free_width(free, y, y + line_height, column_width), narrowest)
+            # Glyph descenders reach below the line box, so include half a line of slack.
+            here = max(_free_width(free, y, y + line_height * 3 // 2, column_width), narrowest)
             if draw.textlength(line, font=body_font) > here:
                 break  # a deeper intrusion than the item was wrapped for: stop this item
             draw.text((margin, y), line, font=body_font, fill=INK_COLOR)
