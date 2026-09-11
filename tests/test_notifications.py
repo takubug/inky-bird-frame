@@ -111,6 +111,40 @@ class NotificationTests(unittest.TestCase):
         path.write_text(CONFIG)
         return load_config(path)
 
+    def test_delivery_falls_back_to_text_when_the_attachment_is_refused(self) -> None:
+        from datetime import UTC, datetime
+        from unittest.mock import patch
+
+        from inky_bird_frame.notifications import NotificationItem, _deliver
+
+        calls: list[dict[str, object]] = []
+
+        class _Notifier:
+            def add(self, url: str) -> bool:
+                return True
+
+            def __len__(self) -> int:
+                return 1
+
+            def notify(self, **kwargs: object) -> bool:
+                calls.append(kwargs)
+                return "attach" not in kwargs  # the provider refuses attachments
+
+        now = datetime.now(UTC)
+        item = NotificationItem(
+            item_id="x", event=NotificationEvent.DISCOVERY, title="t", body="b",
+            created_at=now, attempts=0, next_attempt_at=now, delivered_to=(),
+            attachment="/tmp/plate.png",
+        )
+        with TemporaryDirectory() as temporary:
+            config = self._config(temporary)
+            with patch("inky_bird_frame.notifications._new_notifier", return_value=_Notifier()):
+                _deliver(config.notifications.destinations[0], item)
+        self.assertEqual(len(calls), 2)
+        self.assertIn("attach", calls[0])
+        self.assertNotIn("attach", calls[1])
+        self.assertIn("could not be attached", str(calls[1]["body"]))
+
     def test_attachment_survives_the_queue_round_trip(self) -> None:
         with TemporaryDirectory() as temporary:
             config = self._config(temporary)

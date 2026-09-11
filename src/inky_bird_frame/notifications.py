@@ -5,6 +5,7 @@ from __future__ import annotations
 import fcntl
 import hashlib
 import json
+import logging
 from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -21,6 +22,8 @@ from .timeutil import parse_utc_timestamp
 
 if TYPE_CHECKING:
     import apprise
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -607,9 +610,17 @@ def _deliver(destination: NotificationDestination, item: NotificationItem) -> No
     if not notifier.add(destination.url) or len(notifier) != 1:
         raise ValueError("invalid Apprise service URL")
     if item.attachment:
-        # Apprise forwards the file to providers that accept uploads (ntfy does),
-        # so a pending plate arrives on the phone as the image itself.
-        result = notifier.notify(title=item.title, body=item.body, attach=item.attachment)
+        # Apprise forwards the file to providers that accept uploads, so a pending
+        # plate arrives on the phone as the image itself. A server that refuses
+        # attachments (ntfy without an attachment cache answers 400) rejects the
+        # whole message, so fall back to text: the gate must still ring.
+        if notifier.notify(title=item.title, body=item.body, attach=item.attachment) is True:
+            return
+        logger.warning(
+            "attachment refused for notification %s; delivering text only", item.item_id
+        )
+        body = f"{item.body}\n(The plate image could not be attached to this message.)"
+        result = notifier.notify(title=item.title, body=body)
     else:
         result = notifier.notify(title=item.title, body=item.body)
     if result is not True:

@@ -163,6 +163,24 @@ class FontAndCompositeTests(unittest.TestCase):
         with patch.dict("os.environ", {LABEL_FONT_ENV: "/nonexistent/font.ttf"}):
             self.assertEqual(label_font_path(), BUNDLED_LABEL_FONT)
 
+    def test_long_measurement_lines_stay_inside_the_label_column(self) -> None:
+        from PIL import Image
+
+        profile = _profile()
+        profile["measurements"]["wingspan"] = (
+            "not well documented in standard references or field guides anywhere"
+        )
+        image = Image.new("RGB", PORTRAIT_SIZE, PAPER_COLOR)
+        composite_plate_labels(image, profile)
+        width, height = image.size
+        # Nothing may be inked right of the label column in the upper (label) band.
+        column_edge = max(width // 20, 24) + width * 3 // 10 + width // 40
+        band = image.crop((column_edge, 0, width, height * 3 // 10))
+        self.assertIsNone(
+            Image.eval(band.convert("L"), lambda v: 255 if v < 128 else 0).getbbox(),
+            "measurement text overran the label column",
+        )
+
     def test_labels_are_drawn_in_pure_black_without_resizing(self) -> None:
         from PIL import Image, ImageChops
 

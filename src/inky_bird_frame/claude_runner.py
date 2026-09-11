@@ -236,12 +236,18 @@ def composite_plate_labels(image: Any, profile: SpeciesProfileData) -> None:
     y += int(body_size * 2.4)
 
     measurements = profile["measurements"]
-    lines = [
-        f"Length: {measurements['length']}",
-        f"Wingspan: {measurements['wingspan']}",
-        f"Weight: {measurements['weight']}",
-        "",
-    ]
+    lines: list[str] = []
+    for label, value in (
+        ("Length", measurements["length"]),
+        ("Wingspan", measurements["wingspan"]),
+        ("Weight", measurements["weight"]),
+    ):
+        # Long qualifiers ("not well documented in standard references") must wrap
+        # inside the label column, never run across the bird.
+        wrapped = _wrapped_lines(draw, f"{label}: {value}", body_font, column_width)
+        lines.append(wrapped[0] if wrapped else f"{label}:")
+        lines.extend(f"   {extra}" for extra in wrapped[1:])
+    lines.append("")
     for mark in profile["field_marks"]:
         wrapped = _wrapped_lines(draw, mark, body_font, column_width - body_size)
         if wrapped:
@@ -687,6 +693,12 @@ class ClaudeRunner:
             # LANCZOS keeps the 2K linework crisp through the downscale; softened
             # lines dither into fuzz on the panel.
             plate = ImageOps.fit(source.convert("RGB"), PORTRAIT_SIZE, PILImage.Resampling.LANCZOS)
+        # Retain the text-free illustration with the run logs (never in the
+        # candidate tree, which the catalog publisher allowlists) so a font or
+        # layout change can be re-composited without paying for a new render.
+        raw_path = log_path.with_name(f"{log_path.stem}-raw.png")
+        raw_path.parent.mkdir(parents=True, exist_ok=True)
+        plate.save(raw_path, format="PNG")
         composite_plate_labels(plate, profile)
         output_path.parent.mkdir(parents=True, exist_ok=True)
         plate.save(output_path, format="PNG")
