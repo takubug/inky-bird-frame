@@ -403,15 +403,6 @@ def _free_width(free: list[int], y0: int, y1: int, column_width: int) -> int:
     return min(min(band) if band else column_width, column_width)
 
 
-def _label_items(profile: SpeciesProfileData) -> list[tuple[str, str, str, int]]:
-    """Body items in plate order: measurements (label, value, limit), then marks (text)."""
-    items: list[tuple[str, str, str, int]] = [
-        ("measurement", label, value, limit) for label, value, limit in _measurement_specs(profile)
-    ]
-    items.extend(("mark", "", mark, 0) for mark in profile["field_marks"])
-    return items
-
-
 def composite_plate_labels(image: Any, profile: SpeciesProfileData) -> None:
     """Draw the factual labels onto a text-free illustration, in place.
 
@@ -500,18 +491,21 @@ def _flow_lines(
             _free_width(free, height, height + line_height * 3 // 2, column_width), narrowest
         )
 
-    for kind, label, value, limit in _label_items(profile):
-        if kind == "measurement":
-            band_width = max(_free_width(free, y, y + line_height * 4, column_width), narrowest)
-            for line in _fitted_measurement(draw, label, value, limit, body_font, band_width):
-                if y + line_height > floor:
-                    return placed, False
-                placed.append((y, line))
-                y += line_height
-            if label == "Weight":
-                y += line_height  # gap between the measurements and the field marks
-            continue
-        remaining = value.split()
+    # The measurements read as one block, so they share a width and one decision
+    # about imperial readings rather than being fitted line by line.
+    block_width = max(_free_width(free, y, y + line_height * 6, column_width), narrowest)
+    measurements = _measurement_lines(draw, profile, body_font, block_width)
+    for index, lines in enumerate(measurements):
+        for line in lines:
+            if y + line_height > floor:
+                return placed, False
+            placed.append((y, line))
+            y += line_height
+        if index == len(measurements) - 1:
+            y += line_height  # gap between the measurements and the field marks
+
+    for mark in profile["field_marks"]:
+        remaining = mark.split()
         first = True
         while remaining:
             if y + line_height > floor:
@@ -559,6 +553,21 @@ _TRAILING_FLUFF = re.compile(
 _LEADING_FLUFF = re.compile(
     r"^(approx\.?|approximate(ly)?|about|around|circa|ca?\.)\s+", re.IGNORECASE
 )
+# An imperial reading is the conversion in parentheses after a metric figure
+# ("34-38 cm (13.5-15 in)"). Carrying one on a single measurement and not the
+# others reads as an oversight, so a plate shows them on every line or on none.
+_IMPERIAL_UNITS: Final = r"in|ins|inch|inches|ft|feet|oz|ounces|lb|lbs|pound|pounds"
+_IMPERIAL_READING = re.compile(
+    rf"\s*\([^()]*?\d[^()]*?\b(?:{_IMPERIAL_UNITS})\b[^()]*?\)", re.IGNORECASE
+)
+
+
+def _has_imperial(text: str) -> bool:
+    return _IMPERIAL_READING.search(text) is not None
+
+
+def _without_imperial(value: str) -> str:
+    return _IMPERIAL_READING.sub("", value).strip()
 
 
 def _measurement_text(label: str, value: str) -> str:
@@ -638,43 +647,49 @@ def _fitted_measurement(
 
 
 def _measurement_lines(
-    draw: Any, profile: SpeciesProfileData, body_font: Any, column_width: int
+    draw: Any,
+    profile: SpeciesProfileData,
+    body_font: Any,
+    column_width: int,
+    *,
+    keep_imperial: bool | None = None,
 ) -> list[list[str]]:
-    return [
+    """Fitted lines per measurement; imperial readings survive only on every line or none.
+
+    Pass keep_imperial to force the decision (the layout makes it once for the
+    whole block); by default a reading is kept only when every measurement both
+    offers one and still has room for it at this face size.
+    """
+    specs = _measurement_specs(profile)
+    fitted = [
         _fitted_measurement(draw, label, value, limit, body_font, column_width)
-        for label, value, limit in _measurement_specs(profile)
+        for label, value, limit in specs
+    ]
+    if keep_imperial is None:
+        keep_imperial = all(_has_imperial(" ".join(lines)) for lines in fitted)
+    if keep_imperial or not any(_has_imperial(" ".join(lines)) for lines in fitted):
+        return fitted
+    return [
+        _fitted_measurement(draw, label, _without_imperial(value), limit, body_font, column_width)
+        for label, value, limit in specs
     ]
 
 
 def _measurements_fit(
     draw: Any, profile: SpeciesProfileData, body_font: Any, column_width: int
 ) -> bool:
-    """True when every measurement respects its line limit at this face size."""
-    return all(
-        len(wrapped) <= limit
-        for wrapped, (_, _, limit) in zip(
-            _measurement_lines(draw, profile, body_font, column_width),
-            _measurement_specs(profile),
-            strict=True,
-        )
-    )
+    """True when every measurement respects its line limit, conversions included.
 
-
-def _label_lines(
-    draw: Any, profile: SpeciesProfileData, body_font: Any, body_size: int, column_width: int
-) -> list[str]:
-    """Wrap the measurements and field marks into the label column."""
-    lines: list[str] = []
-    for wrapped in _measurement_lines(draw, profile, body_font, column_width):
-        lines.append(wrapped[0] if wrapped else "")
-        lines.extend(f"   {extra}" for extra in wrapped[1:])
-    lines.append("")
-    for mark in profile["field_marks"]:
-        wrapped = _wrapped_lines(draw, mark, body_font, column_width - body_size)
-        if wrapped:
-            lines.append(f"\u2022 {wrapped[0]}")
-            lines.extend(f"   {extra}" for extra in wrapped[1:])
-    return lines
+    When all three offer an imperial reading the face is worth shrinking a little
+    to keep them; when they do not, there is nothing to preserve and the odd one
+    out is dropped instead.
+    """
+    specs = _measurement_specs(profile)
+    offered = all(_has_imperial(value) for _, value, _ in specs)
+    lines = _measurement_lines(draw, profile, body_font, column_width, keep_imperial=offered)
+    if any(len(wrapped) > limit for wrapped, (_, _, limit) in zip(lines, specs, strict=True)):
+        return False
+    return not offered or all(_has_imperial(" ".join(wrapped)) for wrapped in lines)
 
 
 def spectra_panel_preview(source_path: Path, destination_path: Path) -> Path:

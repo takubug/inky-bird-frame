@@ -196,21 +196,29 @@ class FontAndCompositeTests(unittest.TestCase):
         draw = ImageDraw.Draw(Image.new("RGB", PORTRAIT_SIZE, PAPER_COLOR))
         width = PORTRAIT_SIZE[0]
         for size in range(max(width // 44, 10), max(width // 70, 8) - 1, -1):
-            wingspan = _measurement_lines(draw, profile, _label_font(size), width * 3 // 10)[1]
+            wingspan = _measurement_lines(
+                draw, profile, _label_font(size), width * 3 // 10, keep_imperial=True
+            )[1]
             joined = " ".join(wingspan)
             self.assertNotIn("approx", joined)
             self.assertLessEqual(len(wingspan), 2)
             # A second line may be a whole parenthetical like "(28-35 in)", never "in)".
             self.assertFalse(_dangles(wingspan), wingspan)
         # At a face where the inches fit on one line they are kept.
-        small = _measurement_lines(draw, profile, _label_font(18), width * 3 // 10)[1]
+        small = _measurement_lines(
+            draw, profile, _label_font(18), width * 3 // 10, keep_imperial=True
+        )[1]
         self.assertEqual(small, ["Wingspan: 70\u201390 cm (28\u201335 in)"])
         # At the plate face the parenthetical moves whole to the second line.
-        plate = _measurement_lines(draw, profile, _label_font(24), width * 3 // 10)[1]
+        plate = _measurement_lines(
+            draw, profile, _label_font(24), width * 3 // 10, keep_imperial=True
+        )[1]
         self.assertEqual(plate, ["Wingspan: 70\u201390 cm", "(28\u201335 in)"])
         # And no reading is ever cut inside a parenthesis.
         for size in range(max(width // 44, 10), max(width // 70, 8) - 1, -1):
-            for line in _measurement_lines(draw, profile, _label_font(size), width * 3 // 10)[1]:
+            for line in _measurement_lines(
+                draw, profile, _label_font(size), width * 3 // 10, keep_imperial=True
+            )[1]:
                 self.assertEqual(line.count("("), line.count(")"), line)
 
     def test_measurements_without_a_figure_are_left_off_the_plate(self) -> None:
@@ -326,6 +334,69 @@ class FontAndCompositeTests(unittest.TestCase):
                 draw.textlength(line, font=_label_font(body_size)), column_width * 2 // 5
             )
 
+    def test_imperial_readings_are_shown_on_every_measurement_or_on_none(self) -> None:
+        from PIL import Image, ImageDraw
+
+        from inky_bird_frame.claude_runner import (
+            _has_imperial,
+            _label_font,
+            _measurement_lines,
+            _measurements_fit,
+        )
+
+        draw = ImageDraw.Draw(Image.new("RGB", PORTRAIT_SIZE, PAPER_COLOR))
+        width = PORTRAIT_SIZE[0]
+        font = _label_font(max(width // 44, 10))
+        column = width * 3 // 10
+
+        # One measurement without a conversion drops it from all of them.
+        mixed = _profile()
+        mixed["measurements"] = {
+            "length": "46\u201353 cm (18\u201321 in)",
+            "wingspan": "100\u2013120 cm",
+            "weight": "650\u2013800 g",
+        }
+        self.assertEqual(
+            _measurement_lines(draw, mixed, font, column),
+            [["Length: 46\u201353 cm"], ["Wingspan: 100\u2013120 cm"], ["Weight: 650\u2013800 g"]],
+        )
+
+        # When every measurement offers one, the face shrinks to keep them, and at
+        # any face the plate shows three conversions or none -- never one or two.
+        whole = _profile()
+        whole["measurements"] = {
+            "length": "14\u201315 cm (5.5\u20136 in)",
+            "wingspan": "28\u201332 cm (11\u201312.5 in)",
+            "weight": "10\u201315 g (0.35\u20130.53 oz)",
+        }
+        self.assertTrue(_measurements_fit(draw, whole, _label_font(max(width // 60, 8)), column))
+        self.assertEqual(
+            _measurement_lines(draw, whole, _label_font(max(width // 60, 8)), column),
+            [
+                ["Length: 14\u201315 cm (5.5\u20136 in)"],
+                ["Wingspan: 28\u201332 cm (11\u201312.5 in)"],
+                ["Weight: 10\u201315 g (0.35\u20130.53 oz)"],
+            ],
+        )
+        for candidate in (whole, mixed):
+            for size in range(max(width // 44, 10), max(width // 70, 8) - 1, -1):
+                shown = [
+                    lines
+                    for lines in _measurement_lines(draw, candidate, _label_font(size), column)
+                    if _has_imperial(" ".join(lines))
+                ]
+                self.assertIn(len(shown), (0, 3), (candidate["measurements"], size, shown))
+
+        # A non-imperial parenthetical is a note, not a conversion, and is left alone.
+        noted = _profile()
+        noted["measurements"] = {
+            "length": "16\u201320 cm",
+            "wingspan": "24\u201330 cm (wild birds)",
+            "weight": "15\u201324 g",
+        }
+        wingspan = _measurement_lines(draw, noted, font, column)[1]
+        self.assertEqual(" ".join(wingspan), "Wingspan: 24\u201330 cm (wild birds)")
+
     def test_a_parenthetical_is_never_split_across_lines(self) -> None:
         from PIL import Image, ImageDraw
 
@@ -336,10 +407,14 @@ class FontAndCompositeTests(unittest.TestCase):
         draw = ImageDraw.Draw(Image.new("RGB", PORTRAIT_SIZE, PAPER_COLOR))
         width = PORTRAIT_SIZE[0]
         for size in range(max(width // 44, 10), max(width // 70, 8) - 1, -1):
-            wingspan = _measurement_lines(draw, profile, _label_font(size), width * 3 // 10)[1]
+            wingspan = _measurement_lines(
+                draw, profile, _label_font(size), width * 3 // 10, keep_imperial=True
+            )[1]
             for line in wingspan:
                 self.assertEqual(line.count("("), line.count(")"), wingspan)
-        plate = _measurement_lines(draw, profile, _label_font(24), width * 3 // 10)[1]
+        plate = _measurement_lines(
+            draw, profile, _label_font(24), width * 3 // 10, keep_imperial=True
+        )[1]
         self.assertEqual(plate, ["Wingspan: 17\u201321 cm", "(6.7\u20138.3 in)"])
 
     def test_long_qualifiers_are_trimmed_instead_of_shrinking_the_face(self) -> None:
