@@ -231,6 +231,13 @@ def refresh_command(args: argparse.Namespace) -> int:
     return 0
 
 
+def _candidate_marker(candidate_dir: str) -> str:
+    try:
+        return str(int(Path(candidate_dir).stat().st_mtime))
+    except OSError:
+        return ""
+
+
 def generate_command(args: argparse.Namespace) -> int:
     config = _config(args)
     try:
@@ -276,10 +283,14 @@ def generate_command(args: argparse.Namespace) -> int:
             portrait = item.get("portrait")
             if not isinstance(taxon_id, int) or not isinstance(common_name, str):
                 continue
+            # Key on the candidate directory's identity, not just the taxon, so a
+            # later regeneration of the same bird is not deduplicated into silence.
+            candidate_dir = item.get("candidate_dir")
+            marker = _candidate_marker(candidate_dir) if isinstance(candidate_dir, str) else ""
             safe_notify(
                 config,
                 NotificationEvent.GENERATION_PENDING,
-                dedupe_key=f"pending:{taxon_id}",
+                dedupe_key=f"pending:{taxon_id}:{marker}",
                 title=f"{common_name} plate awaiting your approval",
                 body=(
                     f"A new {common_name} plate passed automated review and is waiting for "

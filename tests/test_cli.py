@@ -396,7 +396,7 @@ rotation_mode = "shuffle_bag"
         self.assertEqual(notify.call_count, 1)
         kwargs = notify.call_args.kwargs
         self.assertEqual(notify.call_args.args[1], NotificationEvent.GENERATION_PENDING)
-        self.assertEqual(kwargs["dedupe_key"], "pending:7")
+        self.assertTrue(kwargs["dedupe_key"].startswith("pending:7:"))
         self.assertIn("approve 7", kwargs["body"])
         self.assertEqual(kwargs["attachment"], "/state/pending/7-held-bird/portrait.png")
 
