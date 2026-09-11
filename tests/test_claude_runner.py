@@ -397,6 +397,40 @@ class FontAndCompositeTests(unittest.TestCase):
         wingspan = _measurement_lines(draw, noted, font, column)[1]
         self.assertEqual(" ".join(wingspan), "Wingspan: 24\u201330 cm (wild birds)")
 
+    def test_text_steps_past_a_deep_intrusion_instead_of_dribbling_into_it(self) -> None:
+        from PIL import Image, ImageDraw
+
+        from inky_bird_frame.claude_runner import _flow_lines, _label_font
+
+        profile = _profile()
+        profile["field_marks"] = [
+            "Often perches on the backs of grazing animals or other prominent lookouts "
+            "while hunting insects"
+        ]
+        profile["measurements"] = {"length": "19 cm", "wingspan": "21 cm", "weight": "20 g"}
+        draw = ImageDraw.Draw(Image.new("RGB", PORTRAIT_SIZE, PAPER_COLOR))
+        width, height = PORTRAIT_SIZE
+        column_width = width * 3 // 10
+        body_size = max(width // 44, 10)
+        line_height = int(body_size * 1.5)
+        narrowest = max(column_width * 2 // 5, body_size * 4)
+        free = [column_width] * height
+        band = range(700, 900)
+        for y in band:  # a tail sweeping almost the whole way across the column
+            free[y] = column_width // 8
+
+        placed, complete = _flow_lines(
+            draw, profile, _label_font(body_size), body_size, free, column_width, 300, height
+        )
+        self.assertTrue(complete)
+        font = _label_font(body_size)
+        for y, line in placed:
+            room = min(free[y : y + line_height * 3 // 2] or [column_width])
+            self.assertGreaterEqual(room, narrowest, (y, line))  # nothing placed in the band
+            self.assertLessEqual(draw.textlength(line, font=font), room, (y, line))
+        text = " ".join(line.strip("\u2022 ") for _, line in placed)
+        self.assertIn(profile["field_marks"][0], text)  # and the mark is still whole
+
     def test_a_parenthetical_is_never_split_across_lines(self) -> None:
         from PIL import Image, ImageDraw
 

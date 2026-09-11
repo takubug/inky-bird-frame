@@ -477,22 +477,30 @@ def _flow_lines(
 
     Each line is filled with as many words as fit in the width actually free of
     ink at its own height, so a tail or wing sweeping into the column narrows
-    the lines there instead of being written over, and an item is never cut
-    short: its remaining words simply continue on the next line.
+    the lines there instead of being written over. Where the illustration
+    reaches in so far that a sensible line no longer fits, the text steps down
+    past that band rather than dribbling one word per line into it, and an item
+    is never cut short: its remaining words continue on the next usable line.
     """
     line_height = int(body_size * 1.5)
+    # Narrower than this reads as a ragged dribble, so the band is skipped instead.
     narrowest = max(column_width * 2 // 5, body_size * 4)
     placed: list[tuple[int, str]] = []
     y = start_y
 
-    def free_here(height: int) -> int:
+    def usable_width(height: int) -> int:
         # Glyph descenders reach below the line box, so include half a line of slack.
-        return max(
-            _free_width(free, height, height + line_height * 3 // 2, column_width), narrowest
-        )
+        return _free_width(free, height, height + line_height * 3 // 2, column_width)
+
+    def next_usable(height: int, needed: int) -> int:
+        """The first line position at or below height with room for a real line."""
+        while height + line_height <= floor and usable_width(height) < needed:
+            height += line_height
+        return height
 
     # The measurements read as one block, so they share a width and one decision
     # about imperial readings rather than being fitted line by line.
+    y = next_usable(y, narrowest)
     block_width = max(_free_width(free, y, y + line_height * 6, column_width), narrowest)
     measurements = _measurement_lines(draw, profile, body_font, block_width)
     for index, lines in enumerate(measurements):
@@ -508,9 +516,10 @@ def _flow_lines(
         remaining = mark.split()
         first = True
         while remaining:
+            y = next_usable(y, narrowest)
             if y + line_height > floor:
                 return placed, False
-            room = free_here(y) - body_size
+            room = usable_width(y) - body_size
             words = [remaining.pop(0)]
             while remaining:
                 candidate = " ".join([*words, remaining[0]])
