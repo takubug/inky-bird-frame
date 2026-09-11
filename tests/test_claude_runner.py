@@ -250,6 +250,38 @@ class FontAndCompositeTests(unittest.TestCase):
         ImageDraw.Draw(edge).line([(2, 0), (2, 1599)], fill=(120, 110, 90), width=3)  # bezel shadow
         self.assertEqual(drawn_page_lines(edge), ())
 
+    def test_leading_approx_is_dropped_and_a_unit_is_never_trimmed_away(self) -> None:
+        from inky_bird_frame.claude_runner import _measurement_text, _trim_candidates
+
+        self.assertEqual(
+            _measurement_text(
+                "Wingspan", "approx. 100\u2013120 cm (est., not precisely documented)"
+            ),
+            "Wingspan: 100\u2013120 cm (est., not precisely documented)",
+        )
+        self.assertEqual(
+            _measurement_text("Weight", "About 650\u2013800 g"), "Weight: 650\u2013800 g"
+        )
+        for candidate in _trim_candidates("100\u2013120 cm (est., not precisely documented)"):
+            self.assertFalse(candidate.split()[-1][-1].isdigit(), candidate)
+
+    def test_erase_page_lines_removes_a_rule_but_keeps_strokes_crossing_it(self) -> None:
+        from PIL import Image, ImageDraw
+
+        from inky_bird_frame.claude_runner import drawn_page_lines, erase_page_lines
+
+        page = Image.new("RGB", PORTRAIT_SIZE, PAPER_COLOR)
+        draw = ImageDraw.Draw(page)
+        draw.line([(300, 0), (300, 1200)], fill=(150, 140, 120), width=2)  # column rule
+        draw.line([(280, 600), (330, 600)], fill=(0, 0, 0), width=3)  # a stroke across it
+        erased = erase_page_lines(page)
+        self.assertEqual(len(erased), 1, erased)
+        self.assertIn("vertical line", erased[0])
+        self.assertEqual(drawn_page_lines(page), ())
+        self.assertEqual(page.getpixel((300, 200)), PAPER_COLOR)  # rule gone
+        self.assertEqual(page.getpixel((300, 600)), (0, 0, 0))  # crossing stroke kept
+        self.assertEqual(erase_page_lines(page), ())  # idempotent
+
     def test_a_parenthetical_is_never_split_across_lines(self) -> None:
         from PIL import Image, ImageDraw
 

@@ -195,10 +195,14 @@ PAGE_LINE_MIN_SPAN: Final = 0.40
 PAGE_LINE_INK_DEPTH: Final = 4
 PAGE_LINE_CLEARANCE: Final = 5
 PAGE_LINE_EDGE: Final = 6
+# Only ink that continues this far along the line is erased, so a hatching stroke
+# or letter crossing the rule's band is left alone.
+PAGE_LINE_MIN_RUN: Final = 40
+PAGE_LINE_ERASE_PASSES: Final = 3
 
 
-def drawn_page_lines(image: Any) -> tuple[str, ...]:
-    """Describe long straight lines drawn across the page (dividers, creases, card edges)."""
+def _page_line_scan(image: Any) -> tuple[dict[str, Any], list[tuple[str, int, int, float]]]:
+    """Return the thin-ink masks and every long straight run as (axis, start, end, span)."""
     from PIL import Image as PILImage
     from PIL import ImageChops, ImageFilter
 
@@ -209,13 +213,15 @@ def drawn_page_lines(image: Any) -> tuple[str, ...]:
     )
     band = ink.filter(ImageFilter.MaxFilter(3))
     width, height = grey.size
-    findings: list[str] = []
+    thin_masks: dict[str, Any] = {}
+    runs: list[tuple[str, int, int, float]] = []
     for axis, (dx, dy) in (
         ("vertical", (PAGE_LINE_CLEARANCE, 0)),
         ("horizontal", (0, PAGE_LINE_CLEARANCE)),
     ):
         flank = ImageChops.lighter(ImageChops.offset(ink, dx, dy), ImageChops.offset(ink, -dx, -dy))
         thin = ImageChops.subtract(band, flank)
+        thin_masks[axis] = thin
         if axis == "vertical":
             profile_image = thin.resize((width, 1), PILImage.Resampling.BOX)
             extent = width
@@ -232,16 +238,79 @@ def drawn_page_lines(image: Any) -> tuple[str, ...]:
             and PAGE_LINE_EDGE <= index < extent - PAGE_LINE_EDGE
         ]
         for start, end in _runs(hits):
-            middle = (start + end) // 2
             span = max(spans[index] for index in range(start, end + 1)) / 255
-            findings.append(
-                f"A drawn {axis} line runs across {span:.0%} of the page at "
-                f"{middle * 100 // extent}% of the {'width' if axis == 'vertical' else 'height'}"
-                " (a column rule, fold, crease, divider, or card edge). Draw no line, rule,"
-                " fold, crease, border, or panel edge anywhere; the paper is one continuous"
-                " unmarked sheet and the reserved label area has no visible boundary."
+            runs.append((axis, start, end, span))
+    return thin_masks, runs
+
+
+def _describe_line(image: Any, axis: str, start: int, end: int, span: float) -> str:
+    width, height = image.size
+    extent = width if axis == "vertical" else height
+    middle = (start + end) // 2
+    return (
+        f"A drawn {axis} line runs across {span:.0%} of the page at "
+        f"{middle * 100 // extent}% of the {'width' if axis == 'vertical' else 'height'}"
+        " (a column rule, fold, crease, divider, or card edge). Draw no line, rule,"
+        " fold, crease, border, or panel edge anywhere; the paper is one continuous"
+        " unmarked sheet and the reserved label area has no visible boundary."
+    )
+
+
+def drawn_page_lines(image: Any) -> tuple[str, ...]:
+    """Describe long straight lines drawn across the page (dividers, creases, card edges)."""
+    _, runs = _page_line_scan(image)
+    return tuple(_describe_line(image, *run) for run in runs)
+
+
+def erase_page_lines(image: Any) -> tuple[str, ...]:
+    """Paint out thin drawn rules in place with the paper beside them; returns what was erased.
+
+    Only the pixels of a detected line that have clean paper on both flanks are
+    replaced (with the mean of the paper a few pixels to either side), so where a
+    rule crosses the drawing the artwork is left untouched. Anything too broad to
+    erase this way is still reported by drawn_page_lines afterwards.
+    """
+    from PIL import Image as PILImage
+    from PIL import ImageChops
+
+    width, height = image.size
+    erased: list[str] = []
+    for _ in range(PAGE_LINE_ERASE_PASSES):
+        thin_masks, runs = _page_line_scan(image)
+        if not runs:
+            break
+        for axis, start, end, span in runs:
+            vertical = axis == "vertical"
+            dx, dy = (PAGE_LINE_CLEARANCE, 0) if vertical else (0, PAGE_LINE_CLEARANCE)
+            fill = ImageChops.blend(
+                ImageChops.offset(image, dx, dy), ImageChops.offset(image, -dx, -dy), 0.5
             )
-    return tuple(findings)
+            window = PILImage.new("L", image.size, 0)
+            box = (
+                (max(start - 2, 0), 0, min(end + 3, width), height)
+                if vertical
+                else (0, max(start - 2, 0), width, min(end + 3, height))
+            )
+            window.paste(255, box)
+            mask = _along_axis_runs(ImageChops.multiply(thin_masks[axis], window), vertical)
+            image.paste(fill, (0, 0), mask)
+            erased.append(_describe_line(image, axis, start, end, span))
+    return tuple(erased)
+
+
+def _along_axis_runs(mask: Any, vertical: bool) -> Any:
+    """Keep only mask pixels that belong to a run of PAGE_LINE_MIN_RUN pixels along the axis."""
+    from PIL import ImageChops
+
+    half = PAGE_LINE_MIN_RUN // 2
+    steps = [(0, k) if vertical else (k, 0) for k in range(-half, half + 1)]
+    eroded = mask
+    for dx, dy in steps:
+        eroded = ImageChops.darker(eroded, ImageChops.offset(mask, dx, dy))
+    dilated = eroded
+    for dx, dy in steps:
+        dilated = ImageChops.lighter(dilated, ImageChops.offset(eroded, dx, dy))
+    return ImageChops.multiply(dilated, mask)
 
 
 def _runs(indices: list[int]) -> list[tuple[int, int]]:
@@ -344,6 +413,7 @@ def composite_plate_labels(image: Any, profile: SpeciesProfileData) -> None:
     labels. Rendering them from the validated profile in one fixed font keeps
     every plate consistent and every name and measurement spelled exactly.
     """
+    erase_page_lines(image)
     try:
         from PIL import ImageDraw
     except ModuleNotFoundError as exc:
@@ -450,13 +520,16 @@ def _measurement_specs(profile: SpeciesProfileData) -> list[tuple[str, str, int]
 _TRAILING_FLUFF = re.compile(
     r"[,;]?\s*\(?(approx\.?|approximate(ly)?|est\.?|estimated)\)?\s*$", re.IGNORECASE
 )
+_LEADING_FLUFF = re.compile(
+    r"^(approx\.?|approximate(ly)?|about|around|circa|ca?\.)\s+", re.IGNORECASE
+)
 
 
 def _measurement_text(label: str, value: str) -> str:
     for long, short in _MEASUREMENT_ABBREVIATIONS:
         value = value.replace(long, short)
-    # A trailing "approx." adds nothing and tends to dangle alone; drop it.
-    value = _TRAILING_FLUFF.sub("", value).strip()
+    # A leading or trailing "approx." adds nothing and tends to dangle alone; drop it.
+    value = _LEADING_FLUFF.sub("", _TRAILING_FLUFF.sub("", value).strip()).strip()
     return f"{label}: {value}"
 
 
@@ -484,7 +557,10 @@ def _trim_candidates(value: str) -> list[str]:
     while len(words) > 2:
         words = words[:-1]
         candidate = " ".join(words)
-        if candidate.count("(") == candidate.count(")"):  # never cut inside a parenthetical
+        # Never cut inside a parenthetical, and never leave a bare figure with its unit gone.
+        if candidate.count("(") == candidate.count(")") and not any(
+            char.isdigit() for char in words[-1]
+        ):
             candidates.append(candidate)
     return [c for c in candidates if c.count("(") == c.count(")")]
 
@@ -1009,6 +1085,12 @@ class ClaudeRunner:
         # Objective house-style check on the text-free page: a drawn rule, fold,
         # or panel edge fails the attempt here, before the paid review, and the
         # findings go back to the image model as the correction.
+        erased = erase_page_lines(plate)
+        if erased:
+            with log_path.open("a", encoding="utf-8") as handle:
+                handle.write(
+                    "\n\nPAGE LINES ERASED:\n" + "\n".join(f"- {d}" for d in erased) + "\n"
+                )
         defects = drawn_page_lines(plate)
         if defects:
             with log_path.open("a", encoding="utf-8") as handle:
