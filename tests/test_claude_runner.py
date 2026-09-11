@@ -261,6 +261,33 @@ class FontAndCompositeTests(unittest.TestCase):
 
         self.assertIn("refs", _measurement_text("Wingspan", "in standard references"))
 
+    def test_labels_flow_around_ink_that_intrudes_into_the_column(self) -> None:
+        from PIL import Image, ImageDraw
+
+        width, height = PORTRAIT_SIZE
+        margin = max(width // 20, 24)
+        column_width = width * 3 // 10
+        image = Image.new("RGB", PORTRAIT_SIZE, PAPER_COLOR)
+        # A dark "tail" sweeping into the right half of the label column mid-page.
+        blob = (
+            margin + column_width // 2,
+            height * 30 // 100,
+            margin + column_width,
+            height * 45 // 100,
+        )
+        ImageDraw.Draw(image).rectangle(blob, fill=(70, 60, 50))
+        profile = _profile()
+        profile["field_marks"] = ["a fairly long field mark that will need several lines"] * 8
+        composite_plate_labels(image, profile)
+        # No label ink (pure black) may land inside the intrusion.
+        region = image.crop(blob)
+        colours = region.getcolors(region.size[0] * region.size[1]) or []
+        self.assertNotIn((0, 0, 0), {c for _, c in colours})
+        # And labels were still drawn beside it (something black exists left of the blob).
+        beside = image.crop((margin, blob[1], blob[0] - 2, blob[3]))
+        colours_beside = beside.getcolors(beside.size[0] * beside.size[1]) or []
+        self.assertIn((0, 0, 0), {c for _, c in colours_beside})
+
     def test_label_block_never_enters_the_bottom_band(self) -> None:
         from PIL import Image
 

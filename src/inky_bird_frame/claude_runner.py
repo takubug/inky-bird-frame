@@ -211,6 +211,47 @@ def _wrapped_lines(draw: Any, text: str, font: Any, max_width: int) -> list[str]
     return lines
 
 
+def _ink_profile(image: Any, margin: int, column_width: int) -> list[int]:
+    """Per row, the width (px) free of illustration ink from the margin, capped at the column.
+
+    Measured on the text-free plate: the paper colour is the dominant colour at the
+    top of the label column, and the first pixel in a row that departs from it by
+    more than the paper grain marks where the artwork begins.
+    """
+    rgb = image.convert("RGB")
+    width, height = rgb.size
+    span = min(margin + column_width, width)
+    strip = rgb.crop((margin, margin, span, margin + max(height // 20, 8)))
+    colours = strip.getcolors(strip.size[0] * strip.size[1]) or [(1, (245, 235, 210))]
+    paper = max(colours)[1]
+    pixels = rgb.load()
+    gap = max(width // 60, 8)
+    free: list[int] = []
+    for y in range(height):
+        edge = span
+        for x in range(margin, span):
+            r, g, b = pixels[x, y][:3]
+            if abs(r - paper[0]) + abs(g - paper[1]) + abs(b - paper[2]) > 90:
+                edge = x
+                break
+        free.append(max(edge - margin - gap, 0))
+    return free
+
+
+def _free_width(free: list[int], y0: int, y1: int, column_width: int) -> int:
+    band = free[max(y0, 0) : max(y1, y0 + 1)]
+    return min(min(band) if band else column_width, column_width)
+
+
+def _label_items(profile: SpeciesProfileData) -> list[tuple[str, str, str, int]]:
+    """Body items in plate order: ("measurement", label, value, limit), then ("mark", "", text, 0)."""
+    items: list[tuple[str, str, str, int]] = [
+        ("measurement", label, value, limit) for label, value, limit in _measurement_specs(profile)
+    ]
+    items.extend(("mark", "", mark, 0) for mark in profile["field_marks"])
+    return items
+
+
 def composite_plate_labels(image: Any, profile: SpeciesProfileData) -> None:
     """Draw the factual labels onto a text-free illustration, in place.
 
@@ -268,10 +309,28 @@ def composite_plate_labels(image: Any, profile: SpeciesProfileData) -> None:
     draw.text((margin, y), f"Family {profile['family']}", font=body_font, fill=INK_COLOR)
     y += int(body_size * 2.4)
 
-    for line in lines:
-        if line:
+    # Flow the body text around the illustration: each item is wrapped to the
+    # width actually free of ink where it will sit, so a tail or wing sweeping
+    # into the column narrows the lines there instead of being written over.
+    free = _ink_profile(image, margin, column_width)
+    narrowest = max(column_width * 2 // 5, body_size * 4)
+    for kind, label, value, limit in _label_items(profile):
+        band_width = max(_free_width(free, y, y + line_height * 3, column_width), narrowest)
+        if kind == "measurement":
+            wrapped = _fitted_measurement(draw, label, value, limit, body_font, band_width)
+        else:
+            marks = _wrapped_lines(draw, value, body_font, band_width - body_size)
+            wrapped = [f"\u2022 {marks[0]}"] + [f"   {extra}" for extra in marks[1:]] if marks else []
+        for line in wrapped:
+            if y + line_height > label_floor:
+                return
+            here = max(_free_width(free, y, y + line_height, column_width), narrowest)
+            if draw.textlength(line, font=body_font) > here:
+                break  # a deeper intrusion than the item was wrapped for: stop this item
             draw.text((margin, y), line, font=body_font, fill=INK_COLOR)
-        y += int(body_size * 1.5)
+            y += line_height
+        if kind == "measurement" and label == "Weight":
+            y += line_height  # gap between the measurements and the field marks
 
 
 # Measurement qualifiers are abbreviated so they read as tidy field notes rather
@@ -470,9 +529,9 @@ marks, or measurement marks; a visible notebook binding, spiral, spine, or gutte
 or aged page edge; stains, foxing, or heavy ageing marks on the paper; a drawn vertical or
 horizontal line, fold, or crease running through the label area; any box, cell, frame, table
 line, or divider drawn around, between, or beneath the studies or swatches; or the bird or any
-study placed inside a drawn border, inset panel, or pasted card. Also lower composition_quality for a
-poorly filled page: a large empty region (for example a blank lower-left corner beneath a short
-label column) or a bird drawn small in a sea of paper reads as unfinished.
+study placed inside a drawn border, inset panel, or pasted card. Also lower composition_quality
+for a poorly filled page: a large empty region (for example a blank lower-left corner beneath a
+short label column) or a bird drawn small in a sea of paper reads as unfinished.
 
 Set passed=true only when all four scores are at least 4, location_free is true, the bird has
 exactly one head, one beak, two wings, two legs, and one tail, and there are no material species or
