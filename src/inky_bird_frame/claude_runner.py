@@ -231,6 +231,10 @@ def composite_plate_labels(image: Any, profile: SpeciesProfileData) -> None:
     label_floor = height * 7 // 10
     body_size = max(width // 44, 10)
     minimum_body = max(width // 70, 8)
+    # Plates must read as one set, so the measurement line limits may only pull
+    # the face down a little (qualifiers are trimmed first); the bottom-band rule
+    # may go further, since a wall of field marks is rarer than a long qualifier.
+    consistent_body = max(int(body_size * 0.9), minimum_body)
     while True:
         body_font = _label_font(body_size)
         block_top = (
@@ -240,7 +244,9 @@ def composite_plate_labels(image: Any, profile: SpeciesProfileData) -> None:
         block_bottom = block_top + len(lines) * int(body_size * 1.5)
         fits_floor = block_bottom <= label_floor
         fits_lines = _measurements_fit(draw, profile, body_font, column_width)
-        if (fits_floor and fits_lines) or body_size <= minimum_body:
+        if fits_floor and (fits_lines or body_size <= consistent_body):
+            break
+        if body_size <= minimum_body:
             break
         body_size -= 1
     # At the minimum face, drop trailing lines rather than cross into the band.
@@ -288,12 +294,37 @@ def _measurement_text(label: str, value: str) -> str:
     return f"{label}: {value}"
 
 
+def _trim_candidates(value: str) -> list[str]:
+    """Progressively shorter readings of a measurement value, leading clause first."""
+    candidates = [value]
+    for separator in ("; ", " (", ", ", " - ", " \u2013 "):
+        head = value.split(separator, 1)[0].strip()
+        if head and head != value and head not in candidates:
+            candidates.append(head)
+    words = candidates[-1].split()
+    while len(words) > 2:
+        words = words[:-1]
+        candidates.append(" ".join(words))
+    return candidates
+
+
+def _fitted_measurement(
+    draw: Any, label: str, value: str, limit: int, body_font: Any, column_width: int
+) -> list[str]:
+    """Wrap a measurement within its line limit, trimming the qualifier before giving up."""
+    for candidate in _trim_candidates(value):
+        wrapped = _wrapped_lines(draw, _measurement_text(label, candidate), body_font, column_width)
+        if len(wrapped) <= limit:
+            return wrapped
+    return _wrapped_lines(draw, _measurement_text(label, value), body_font, column_width)
+
+
 def _measurement_lines(
     draw: Any, profile: SpeciesProfileData, body_font: Any, column_width: int
 ) -> list[list[str]]:
     return [
-        _wrapped_lines(draw, _measurement_text(label, value), body_font, column_width)
-        for label, value, _ in _measurement_specs(profile)
+        _fitted_measurement(draw, label, value, limit, body_font, column_width)
+        for label, value, limit in _measurement_specs(profile)
     ]
 
 

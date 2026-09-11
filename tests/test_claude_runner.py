@@ -181,6 +181,24 @@ class FontAndCompositeTests(unittest.TestCase):
             "measurement text overran the label column",
         )
 
+    def test_long_qualifiers_are_trimmed_instead_of_shrinking_the_face(self) -> None:
+        from PIL import Image, ImageDraw
+
+        from inky_bird_frame.claude_runner import _label_font, _measurement_lines
+
+        profile = _profile()
+        profile["measurements"]["wingspan"] = (
+            "not well documented; proportionate to a small-to-medium honeyeater build"
+        )
+        draw = ImageDraw.Draw(Image.new("RGB", PORTRAIT_SIZE, PAPER_COLOR))
+        width = PORTRAIT_SIZE[0]
+        default_face = _label_font(max(width // 44, 10))
+        wrapped = _measurement_lines(draw, profile, default_face, width * 3 // 10)
+        # At the standard face the wingspan is trimmed to its leading clause and fits.
+        self.assertLessEqual(len(wrapped[1]), 2)
+        self.assertIn("not well documented", " ".join(wrapped[1]))
+        self.assertNotIn("proportionate", " ".join(wrapped[1]))
+
     def test_length_and_weight_never_wrap_and_wingspan_takes_at_most_two_lines(self) -> None:
         from PIL import Image, ImageDraw
 
