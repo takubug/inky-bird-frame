@@ -167,7 +167,8 @@ Style and composition:
 - Along the bottom quarter of the page, as one row from left to right spanning the full width:
   one wing-pattern study, one bill/head study, and one row of unlabeled color swatches. Exactly
   those three elements, kept inside the bottom quarter; no other figures, studies, or flight
-  poses anywhere.
+  poses anywhere. They sit directly on the bare paper: no boxes, cells, frames, table lines,
+  divider lines, or underlines around, between, or beneath them.
 - Fill the page: no large empty regions apart from the reserved label area described below.
 - No ruler, scale bar, tick marks, or measurement marks of any kind, anywhere on the page.
 - It should look like a carefully scanned scientific field-journal page, not Audubon, not a
@@ -467,8 +468,9 @@ and set passed=false if any of these appear: any letters, numerals, words, or ha
 by the image model (anything not in the composited label column); any ruler, scale bar, tick
 marks, or measurement marks; a visible notebook binding, spiral, spine, or gutter; a torn, curled,
 or aged page edge; stains, foxing, or heavy ageing marks on the paper; a drawn vertical or
-horizontal line, fold, or crease running through the label area; or the bird or any study
-placed inside a drawn border, inset panel, or pasted card. Also lower composition_quality for a
+horizontal line, fold, or crease running through the label area; any box, cell, frame, table
+line, or divider drawn around, between, or beneath the studies or swatches; or the bird or any
+study placed inside a drawn border, inset panel, or pasted card. Also lower composition_quality for a
 poorly filled page: a large empty region (for example a blank lower-left corner beneath a short
 label column) or a bird drawn small in a sea of paper reads as unfinished.
 

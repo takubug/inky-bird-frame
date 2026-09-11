@@ -293,6 +293,8 @@ class FontAndCompositeTests(unittest.TestCase):
         self.assertIn("no ruled lines,\n  column rules, folds, or creases", prompt)
         review = review_prompt_with_preview(_species(), _profile(), [_reference()], ("a.example",))
         self.assertIn("crease running through the label area", review)
+        self.assertIn("no boxes, cells, frames, table lines", prompt)
+        self.assertIn("divider drawn around, between, or beneath the studies", review)
 
     def test_labels_are_drawn_in_pure_black_without_resizing(self) -> None:
         from PIL import Image, ImageChops
