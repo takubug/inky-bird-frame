@@ -267,6 +267,12 @@ def _describe_line(image: Any, axis: str, start: int, end: int, span: float) -> 
 # it must either be written over the artwork or step around it, and both look
 # worse than simply drawing the bird where the prompt asked.
 COLUMN_CLEAR_FRACTION: Final = 0.70
+# A label line narrower than this fraction of the column reads as a ragged
+# dribble of one or two words ("green-blue" alone on a line), so the text steps
+# past that band instead. Chosen on real plates: at 0.40 a duck's speculum
+# bullet broke into eight stub lines, and at 0.65 or above the block split
+# around the bird with a blank band; 0.55 keeps every plate in one clean column.
+FLOW_NARROWEST_FRACTION: Final = 0.55
 
 
 def label_column_intrusion(image: Any) -> tuple[str, ...]:
@@ -519,7 +525,7 @@ def _flow_lines(
     """
     line_height = int(body_size * 1.5)
     # Narrower than this reads as a ragged dribble, so the band is skipped instead.
-    narrowest = max(column_width * 2 // 5, body_size * 4)
+    narrowest = max(int(column_width * FLOW_NARROWEST_FRACTION), body_size * 4)
     placed: list[tuple[int, str]] = []
     broken = False
     y = start_y

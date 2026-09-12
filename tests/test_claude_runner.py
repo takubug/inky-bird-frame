@@ -317,8 +317,10 @@ class FontAndCompositeTests(unittest.TestCase):
         width, height = PORTRAIT_SIZE
         column_width = width * 3 // 10
         free = [column_width] * height
-        for y in range(500, 700):  # a tail sweeping deep into the column
-            free[y] = column_width * 2 // 5
+        # An intrusion that still leaves a usable line: the text narrows here.
+        shallow = column_width * 7 // 10
+        for y in range(500, 700):
+            free[y] = shallow
         body_size = max(width // 44, 10)
         placed, complete, broken = _flow_lines(
             draw, profile, _label_font(body_size), body_size, free, column_width, 300, height
@@ -331,9 +333,7 @@ class FontAndCompositeTests(unittest.TestCase):
         narrow = [line for y, line in placed if 500 <= y < 700]
         self.assertTrue(narrow)
         for line in narrow:
-            self.assertLessEqual(
-                draw.textlength(line, font=_label_font(body_size)), column_width * 2 // 5
-            )
+            self.assertLessEqual(draw.textlength(line, font=_label_font(body_size)), shallow)
 
     def test_imperial_readings_are_shown_on_every_measurement_or_on_none(self) -> None:
         from PIL import Image, ImageDraw
@@ -401,8 +401,14 @@ class FontAndCompositeTests(unittest.TestCase):
     def test_text_steps_past_a_deep_intrusion_instead_of_dribbling_into_it(self) -> None:
         from PIL import Image, ImageDraw
 
-        from inky_bird_frame.claude_runner import _flow_lines, _label_font
+        from inky_bird_frame.claude_runner import (
+            FLOW_NARROWEST_FRACTION,
+            _flow_lines,
+            _label_font,
+        )
 
+        # Half the column is the floor below which a line stops being a line.
+        self.assertGreaterEqual(FLOW_NARROWEST_FRACTION, 0.5)
         profile = _profile()
         profile["field_marks"] = [
             "Often perches on the backs of grazing animals or other prominent lookouts "
@@ -415,7 +421,7 @@ class FontAndCompositeTests(unittest.TestCase):
         column_width = width * 3 // 10
         body_size = max(width // 44, 10)
         line_height = int(body_size * 1.5)
-        narrowest = max(column_width * 2 // 5, body_size * 4)
+        narrowest = max(int(column_width * FLOW_NARROWEST_FRACTION), body_size * 4)
         free = [column_width] * height
         band = range(700, 900)
         for y in band:  # a tail sweeping almost the whole way across the column
@@ -553,10 +559,15 @@ class FontAndCompositeTests(unittest.TestCase):
         region = image.crop(blob)
         colours = region.getcolors(region.size[0] * region.size[1]) or []
         self.assertNotIn((0, 0, 0), {c for _, c in colours})
-        # And labels were still drawn beside it (something black exists left of the blob).
-        beside = image.crop((margin, blob[1], blob[0] - 2, blob[3]))
-        colours_beside = beside.getcolors(beside.size[0] * beside.size[1]) or []
-        self.assertIn((0, 0, 0), {c for _, c in colours_beside})
+        # This blob leaves only half the column, below the floor for a real line,
+        # so the text steps over the band and resumes below it.
+        for box in (
+            (margin, margin, margin + column_width, blob[1] - 2),
+            (margin, blob[3] + 2, margin + column_width, height * 7 // 10),
+        ):
+            strip = image.crop(box)
+            found = strip.getcolors(strip.size[0] * strip.size[1]) or []
+            self.assertIn((0, 0, 0), {colour for _, colour in found}, box)
 
     def test_label_block_never_enters_the_bottom_band(self) -> None:
         from PIL import Image
