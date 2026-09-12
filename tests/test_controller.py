@@ -1036,6 +1036,50 @@ class ControllerTests(unittest.TestCase):
         )
         self.assertTrue(history[1]["quality_review"]["passed"])
 
+    def test_repeated_rejections_park_a_taxon_without_breaking_the_cycle(self) -> None:
+        from inky_bird_frame.controller import _has_terminal_state
+
+        with TemporaryDirectory() as temporary:
+            state = Path(temporary)
+            rejected = state / "rejected"
+            rejected.mkdir(parents=True)
+            # reject_candidate gives each rejection its own timestamped directory.
+            (rejected / "9083-northern-cardinal").mkdir()
+            (rejected / "9083-northern-cardinal-1789123680").mkdir()
+            (rejected / "9083-northern-cardinal-1789125780").mkdir()
+            self.assertTrue(_has_terminal_state(state, 9083))
+            self.assertFalse(_has_terminal_state(state, 1234))
+
+    def test_retry_clears_every_rejection_for_a_taxon(self) -> None:
+        species = BirdSpecies(9083, "Northern Cardinal", "Cardinalis cardinalis", 2, "test")
+        from inky_bird_frame.controller import _has_terminal_state
+
+        with TemporaryDirectory() as temporary:
+            config_path = Path(temporary) / "config.toml"
+            config_path.write_text(CONFIG)
+            config = load_config(config_path)
+            state = config.controller.state_dir
+            rejected = state / "rejected"
+            rejected.mkdir(parents=True)
+            for name in (
+                "9083-northern-cardinal",
+                "9083-northern-cardinal-1789123680",
+                "9083-northern-cardinal-1789125780",
+            ):
+                directory = rejected / name
+                directory.mkdir()
+                (directory / "manifest.json").write_text(json.dumps({"status": "rejected"}))
+            self.assertTrue(_has_terminal_state(state, species.taxon_id))
+
+            from inky_bird_frame.cli import main
+
+            exit_code = main(["retry", str(species.taxon_id), "--config", str(config_path)])
+
+            self.assertEqual(exit_code, 0)
+            self.assertEqual(list(rejected.glob("9083-*")), [])
+            self.assertEqual(len(list((state / "archive").glob("9083-*"))), 3)
+            self.assertFalse(_has_terminal_state(state, species.taxon_id))
+
     def test_runtime_generation_failure_remains_eligible(self) -> None:
         species = BirdSpecies(9083, "Northern Cardinal", "Cardinalis cardinalis", 2, "test")
         location = DiscoveryLocation("12345", "Exampleville", "XY", 1.0, 2.0)

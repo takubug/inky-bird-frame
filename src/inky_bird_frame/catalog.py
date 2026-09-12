@@ -96,10 +96,23 @@ def rejected_directory(state_dir: Path, species: BirdSpecies) -> Path:
 
 
 def find_taxon_directory(parent: Path, taxon_id: int) -> Path | None:
-    matches = sorted(parent.glob(f"{taxon_id}-*"))
+    """The single directory for a taxon; an error if there are several.
+
+    Use this only where exactly one can exist, such as a pending candidate that
+    is about to be approved. `rejected` holds one directory per rejection, so
+    ask for all of them with find_taxon_directories instead.
+    """
+    matches = find_taxon_directories(parent, taxon_id)
     if len(matches) > 1:
         raise CatalogError(f"Multiple directories found for taxon {taxon_id} in {parent}")
     return matches[0] if matches else None
+
+
+def find_taxon_directories(parent: Path, taxon_id: int) -> list[Path]:
+    """Every directory for a taxon, oldest name first; empty when there are none."""
+    if not parent.exists():
+        return []
+    return sorted(path for path in parent.glob(f"{taxon_id}-*") if path.is_dir())
 
 
 def write_candidate_manifest(

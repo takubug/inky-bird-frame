@@ -34,6 +34,7 @@ from .catalog import (
     candidate_directory,
     catalog_state_lock,
     clear_catalog_staging,
+    find_taxon_directories,
     find_taxon_directory,
     has_passing_sourced_review,
     is_bounded_generation,
@@ -923,10 +924,16 @@ def generate_candidate(
 
 
 def _has_terminal_state(state_dir: Path, taxon_id: int) -> bool:
+    """True when a taxon is parked awaiting a human, so the cycle must leave it alone.
+
+    A taxon can hold several rejected directories, one per rejection, so this
+    asks whether any state exists rather than for the one directory: the strict
+    lookup raises on duplicates and would take the whole cycle down with it.
+    """
     return any(
-        find_taxon_directory(state_dir / category, taxon_id) is not None
-        for category in ("pending", "rejected")
-    ) or bool(list((state_dir / "failed").glob(f"{taxon_id}-*")))
+        find_taxon_directories(state_dir / category, taxon_id)
+        for category in ("pending", "rejected", "failed")
+    )
 
 
 def record_failure(state_dir: Path, species: BirdSpecies, error: InkyBirdFrameError) -> Path:

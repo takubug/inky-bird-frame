@@ -18,6 +18,7 @@ from .birds import BirdSpecies, DateRange, ObservationWindow, parse_observation_
 from .catalog import (
     approve_candidate,
     catalog_state_lock,
+    find_taxon_directories,
     find_taxon_directory,
     read_json,
     rebuild_catalog_index,
@@ -440,9 +441,11 @@ def retry_command(args: argparse.Namespace) -> int:
         )
         quality_findings = _latest_quality_findings(failed_directories)
         sources = list(failed_directories)
-        rejected = find_taxon_directory(config.controller.state_dir / "rejected", args.taxon_id)
-        if rejected is not None:
-            sources.append(rejected)
+        # Every rejection leaves its own directory, and all of them keep the taxon
+        # parked, so a retry has to clear the lot rather than just the first.
+        sources.extend(
+            find_taxon_directories(config.controller.state_dir / "rejected", args.taxon_id)
+        )
         retry_store = RetryStore(config.controller.state_dir / "generation-retries.json")
         deferred = retry_store.get(args.taxon_id) is not None
         if not sources and not deferred:
