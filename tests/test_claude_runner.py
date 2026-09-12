@@ -442,6 +442,51 @@ class FontAndCompositeTests(unittest.TestCase):
         text = " ".join(line.strip("\u2022 ") for _, line in placed)
         self.assertIn(profile["field_marks"][0], text)  # and the mark is still whole
 
+    def test_a_clean_plate_reports_no_defects_and_gets_its_labels(self) -> None:
+        from PIL import Image, ImageDraw
+
+        from inky_bird_frame.claude_runner import INK_COLOR, label_plate
+
+        profile = _profile()
+        width, height = PORTRAIT_SIZE
+        # A plausible page: stippled paper, the bird well right of the label column.
+        page = Image.new("RGB", PORTRAIT_SIZE, PAPER_COLOR)
+        draw = ImageDraw.Draw(page)
+        for y in range(0, height, 7):
+            for x in range(0, width, 11):
+                draw.point((x, y), fill=(243, 233, 205))
+        draw.ellipse((width // 2, height // 4, width - 80, height * 3 // 5), fill=(90, 80, 70))
+        erased, defects = label_plate(page, profile)
+        self.assertEqual(defects, (), defects)  # nothing objective stands in the way
+        # The labels really were drawn: the title is pure ink in the top margin.
+        band = page.crop((0, 0, width // 2, height // 6))
+        colours = band.getcolors(band.size[0] * band.size[1]) or []
+        self.assertIn(INK_COLOR, {colour for _, colour in colours})
+
+    def test_a_drawing_that_swallows_the_column_is_reported_as_a_defect(self) -> None:
+        from PIL import Image, ImageDraw
+
+        from inky_bird_frame.claude_runner import label_plate
+
+        page = Image.new("RGB", PORTRAIT_SIZE, PAPER_COLOR)
+        width, height = PORTRAIT_SIZE
+        margin = max(width // 20, 24)
+        column_width = width * 3 // 10
+        # Artwork filling the label column top to bottom: no face can lay text out.
+        ImageDraw.Draw(page).rectangle(
+            (
+                margin + column_width // 5,
+                margin + height // 8,
+                margin + column_width,
+                height * 7 // 10,
+            ),
+            fill=(80, 70, 60),
+        )
+        _, defects = label_plate(page, _profile())
+        self.assertEqual(len(defects), 1, defects)
+        self.assertIn("reaches into the reserved label column", defects[0])
+        self.assertIn("Keep the left third of the page", defects[0])
+
     def test_a_parenthetical_is_never_split_across_lines(self) -> None:
         from PIL import Image, ImageDraw
 

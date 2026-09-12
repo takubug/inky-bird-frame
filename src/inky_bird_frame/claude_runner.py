@@ -302,6 +302,22 @@ def label_column_intrusion(image: Any) -> tuple[str, ...]:
     )
 
 
+def label_plate(image: Any, profile: SpeciesProfileData) -> tuple[tuple[str, ...], tuple[str, ...]]:
+    """Erase drawn rules, composite the labels, and report (erased, defects).
+
+    Defects are the objective reasons this drawing cannot carry its labels: a
+    rule too broad to erase, or a layout that had to break a sentence around the
+    artwork. An empty tuple means the plate is finished and labelled.
+    """
+    erased = erase_page_lines(image)
+    surviving = drawn_page_lines(image)
+    if surviving:
+        return erased, surviving
+    if not composite_plate_labels(image, profile):
+        return erased, label_column_intrusion(image)
+    return erased, ()
+
+
 def drawn_page_lines(image: Any) -> tuple[str, ...]:
     """Describe long straight lines drawn across the page (dividers, creases, card edges)."""
     _, runs = _page_line_scan(image)
@@ -1191,28 +1207,18 @@ class ClaudeRunner:
         # Objective house-style check on the text-free page: a drawn rule, fold,
         # or panel edge fails the attempt here, before the paid review, and the
         # findings go back to the image model as the correction.
-        laid_out_cleanly = True
-        erased = erase_page_lines(plate)
-        if erased:
-            with log_path.open("a", encoding="utf-8") as handle:
+        erased, defects = label_plate(plate, profile)
+        with log_path.open("a", encoding="utf-8") as handle:
+            if erased:
                 handle.write(
                     "\n\nPAGE LINES ERASED:\n" + "\n".join(f"- {d}" for d in erased) + "\n"
                 )
-        defects = drawn_page_lines(plate) + label_column_intrusion(plate)
-        if defects:
-            with log_path.open("a", encoding="utf-8") as handle:
+            if defects:
                 handle.write(
                     "\n\nPAGE CHECK FAILED:\n" + "\n".join(f"- {d}" for d in defects) + "\n"
                 )
+        if defects:
             raise PageDefectError(defects)
-        laid_out_cleanly = composite_plate_labels(plate, profile)
-        if not laid_out_cleanly:
-            # The labels could not be laid out beside this drawing without breaking
-            # a sentence across the artwork or running out of column.
-            intrusion = label_column_intrusion(plate)
-            with log_path.open("a", encoding="utf-8") as handle:
-                handle.write("\n\nLAYOUT FAILED:\n" + "\n".join(f"- {d}" for d in intrusion) + "\n")
-            raise PageDefectError(intrusion)
         output_path.parent.mkdir(parents=True, exist_ok=True)
         plate.save(output_path, format="PNG")
         if not output_path.is_file() or output_path.stat().st_size == 0:
