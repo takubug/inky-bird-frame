@@ -192,9 +192,11 @@ paper runs continuously and unmarked across the whole sheet.
 # paper a few pixels to either side. Bird outlines and hatching are broader,
 # shorter, or flanked by more ink, so they do not reach the threshold.
 PAGE_LINE_MIN_SPAN: Final = 0.40
-# Shorter rules (an underline beneath the studies, a divider between two of them)
-# are erased too, but only a page-spanning one fails the attempt outright.
-PAGE_LINE_ERASE_SPAN: Final = 0.30
+# Shorter rules are erased too, down to a divider between two bottom studies:
+# those run about a fifth of the page, below the 0.40 that fails an attempt but
+# above real artwork, which the run-length and clean-flank guards already screen
+# out. Only a page-spanning rule fails the attempt outright.
+PAGE_LINE_ERASE_SPAN: Final = 0.15
 PAGE_LINE_INK_DEPTH: Final = 4
 PAGE_LINE_CLEARANCE: Final = 5
 PAGE_LINE_EDGE: Final = 16

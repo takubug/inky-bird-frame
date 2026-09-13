@@ -273,6 +273,27 @@ class FontAndCompositeTests(unittest.TestCase):
         for candidate in _trim_candidates("100\u2013120 cm (est., not precisely documented)"):
             self.assertFalse(candidate.split()[-1][-1].isdigit(), candidate)
 
+    def test_a_short_divider_between_studies_is_erased(self) -> None:
+        from PIL import Image, ImageDraw
+
+        from inky_bird_frame.claude_runner import drawn_page_lines, erase_page_lines
+
+        width, height = PORTRAIT_SIZE
+        page = Image.new("RGB", PORTRAIT_SIZE, PAPER_COLOR)
+        draw = ImageDraw.Draw(page)
+        # A ~20%-tall vertical rule between two bottom-row studies: too short to
+        # fail the attempt (0.40) but the model draws these constantly.
+        top = int(height * 0.80)
+        draw.line(
+            [(width // 2, top), (width // 2, top + int(height * 0.20))],
+            fill=(150, 140, 120),
+            width=2,
+        )
+        self.assertEqual(drawn_page_lines(page), ())  # under the 0.40 fail threshold
+        erased = erase_page_lines(page)
+        self.assertEqual(len(erased), 1, erased)
+        self.assertEqual(page.getpixel((width // 2, top + int(height * 0.10))), PAPER_COLOR)
+
     def test_erase_page_lines_removes_a_rule_but_keeps_strokes_crossing_it(self) -> None:
         from PIL import Image, ImageDraw
 
