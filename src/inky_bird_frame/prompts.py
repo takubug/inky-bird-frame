@@ -9,7 +9,7 @@ from pathlib import Path
 from .birds import BirdSpecies, TaxonContext
 from .models import ReferencePhoto, SpeciesProfileData
 
-PROMPT_VERSION = "field-journal-v2"
+PROMPT_VERSION = "field-journal-v3"
 
 
 class _TextExtractor(HTMLParser):

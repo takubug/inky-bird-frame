@@ -139,6 +139,32 @@ class ReviewPromptTests(unittest.TestCase):
         self.assertIn("black, white, red, yellow, green, blue", prompt)
         self.assertIn("birds.example, field.example", prompt)
 
+    def test_pass_rule_is_binding_and_forbids_a_veto_over_passing_scores(self) -> None:
+        prompt = review_prompt_with_preview(
+            _species(),
+            _profile(),
+            [_reference()],
+            ("birds.example", "field.example"),
+        )
+        # The verdict must follow the four conditions, not a holistic override:
+        # this is what trapped white birds (passed=false while all scores >= 4).
+        self.assertIn("The passed flag is decided ONLY by these four conditions", prompt)
+        self.assertIn("you MUST return\npassed=true", prompt)
+        self.assertIn("Never return passed=false while all four scores are at least 4", prompt)
+
+    def test_faithful_white_rendering_is_not_penalised(self) -> None:
+        prompt = review_prompt_with_preview(
+            _species(),
+            _profile(),
+            [_reference()],
+            ("birds.example", "field.example"),
+        )
+        # A white bird is meant to look white; faithful pale rendering must not
+        # cost a score or trip the veto. Fix the rule, not the art.
+        self.assertIn("A white or pale bird is meant to look white", prompt)
+        self.assertIn("native\npanel pigments that render cleanly", prompt)
+        self.assertIn("Do not lower any score", prompt)
+
     def test_preview_prompt_treats_composited_lettering_as_exact(self) -> None:
         prompt = review_prompt_with_preview(_species(), _profile(), [_reference()], ("a.example",))
         self.assertIn("composited by software", prompt)

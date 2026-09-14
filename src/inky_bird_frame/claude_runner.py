@@ -831,9 +831,20 @@ study placed inside a drawn border, inset panel, or pasted card. Also lower comp
 for a poorly filled page: a large empty region (for example a blank lower-left corner beneath a
 short label column) or a bird drawn small in a sea of paper reads as unfinished.
 
-Set passed=true only when all four scores are at least 4, location_free is true, the bird has
-exactly one head, one beak, two wings, two legs, and one tail, and there are no material species or
-text errors. Return only the requested JSON.
+A white or pale bird is meant to look white: white and the other five palette colors are native
+panel pigments that render cleanly, so a faithful white or pale plumage, wash, or color swatch is
+correct rendering, not a defect. Do not lower any score, and never set passed=false, because a
+white bird reads as white, a pale swatch is light against the cream paper, or subtle tone renders
+as gentle dither. Judge only genuine failures: wrong species, wrong facts, wrong anatomy, illegible
+labels, house-style violations, or a poorly filled page.
+
+The passed flag is decided ONLY by these four conditions: (1) all four scores are at least 4;
+(2) location_free is true; (3) the bird has exactly one head, one beak, two wings, two legs, and
+one tail; (4) there are no material species or text errors. When all four hold you MUST return
+passed=true, even if you would have preferred a more polished plate. When any one fails you MUST
+return passed=false. Never return passed=false while all four scores are at least 4: the scores
+are the whole verdict, so any real concern must already be reflected in a score, not added as a
+separate veto. Return only the requested JSON.
 
 Reference provenance:
 {reference_list(references)}
