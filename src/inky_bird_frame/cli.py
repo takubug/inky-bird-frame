@@ -560,6 +560,15 @@ def status_command(args: argparse.Namespace) -> int:
 
 def serve_command(args: argparse.Namespace) -> int:
     config = _config(args, load_secrets=False)
+    # Sending Approve/Reject confirmations needs the real notification URLs, which
+    # load_secrets=False redacts (an inline URL may carry credentials). Load those
+    # with secrets for delivery only, but never let a missing secret stop the
+    # catalog server from starting: fall back to the redacted config, which simply
+    # means no confirmation is sent.
+    try:
+        notify_config = _config(args, load_secrets=True)
+    except (InkyBirdFrameError, OSError):
+        notify_config = config
 
     def _refresh_active_catalog() -> None:
         # A phone approval should reach the frame promptly. Rebuild the active
@@ -584,7 +593,7 @@ def serve_command(args: argparse.Namespace) -> int:
         }
         with suppress(Exception):
             deliver_now(
-                config,
+                notify_config,
                 NotificationEvent.REVIEW_DECISION,
                 dedupe_key=f"decision:{taxon_id}:{outcome}:{datetime.now(UTC).isoformat()}",
                 title=titles.get(outcome, "Plate update"),

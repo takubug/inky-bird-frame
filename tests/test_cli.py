@@ -122,7 +122,7 @@ class CliTests(unittest.TestCase):
 
         self.assertEqual(str(args.config), "instance.toml")
 
-    def test_serve_loads_config_without_resolving_private_environment(self) -> None:
+    def test_serve_loads_catalog_without_secrets_but_notifications_with_them(self) -> None:
         controller = SimpleNamespace()
         args = Namespace(config=Path("instance.toml"))
         with (
@@ -135,10 +135,35 @@ class CliTests(unittest.TestCase):
             result = serve_command(args)
 
         self.assertEqual(result, 0)
-        load.assert_called_once_with(Path("instance.toml"), load_secrets=False)
+        # The catalog server loads without secrets; the confirmation sender loads
+        # with them so the notification URL is real, not redacted.
+        load.assert_any_call(Path("instance.toml"), load_secrets=False)
+        load.assert_any_call(Path("instance.toml"), load_secrets=True)
         serve.assert_called_once()
         self.assertIs(serve.call_args.args[0], controller)
         self.assertTrue(callable(serve.call_args.kwargs["refresh_active_catalog"]))
+        self.assertTrue(callable(serve.call_args.kwargs["on_decision"]))
+
+    def test_serve_survives_when_notification_secrets_are_unavailable(self) -> None:
+        # A missing notification secret must not stop the catalog server: the
+        # secrets load fails, the server still starts (no confirmations sent).
+        controller = SimpleNamespace()
+        args = Namespace(config=Path("instance.toml"))
+
+        def fake_load(_path: Path, *, load_secrets: bool) -> object:
+            if load_secrets:
+                raise ConfigurationError("missing notification secret")
+            return SimpleNamespace(controller=controller)
+
+        with (
+            patch("inky_bird_frame.cli.load_config", side_effect=fake_load),
+            patch("inky_bird_frame.cli.serve_catalog") as serve,
+        ):
+            result = serve_command(args)
+
+        self.assertEqual(result, 0)
+        serve.assert_called_once()
+        self.assertIs(serve.call_args.args[0], controller)
 
     def test_seed_supports_year_window_and_overrides(self) -> None:
         args = build_parser().parse_args(
