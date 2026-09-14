@@ -41,6 +41,9 @@ class CatalogRequestHandler(BaseHTTPRequestHandler):
     # Rebuilds the active (on-frame) catalog after an approval so a phone approve
     # reaches the frame on the next fetch, not just the next generation cycle.
     refresh_active_catalog: Callable[[], None] | None = None
+    # Pushes a confirmation back to the notifier after a phone Approve/Reject
+    # (taxon_id, outcome, message), so a silent action button gets visible feedback.
+    on_decision: Callable[[int, str, str], None] | None = None
 
     def _send_json(self, status: HTTPStatus, payload: object) -> None:
         body = json.dumps(payload, sort_keys=True).encode()
@@ -151,14 +154,19 @@ class CatalogRequestHandler(BaseHTTPRequestHandler):
         self._send_json(HTTPStatus.NOT_FOUND, {"ok": False, "error": "not found"})
 
     def _approve(self, taxon_id: int) -> None:
+        name = self._pending_common_name(taxon_id) or f"Plate {taxon_id}"
         try:
             entry = approve_candidate(self.state_dir, self.catalog_dir, taxon_id)
         except CatalogError as exc:
+            self._decision(taxon_id, "error", f"Could not approve {name}: {exc}")
             self._send_json(HTTPStatus.CONFLICT, {"ok": False, "error": str(exc)})
             return
         if self.refresh_active_catalog is not None:
             with suppress(Exception):
                 self.refresh_active_catalog()
+        self._decision(
+            taxon_id, "approved", f"{entry.common_name} approved; it will appear on the frame."
+        )
         self._send_json(
             HTTPStatus.OK,
             {
@@ -171,15 +179,34 @@ class CatalogRequestHandler(BaseHTTPRequestHandler):
         )
 
     def _reject(self, taxon_id: int, reason: str) -> None:
+        name = self._pending_common_name(taxon_id) or f"Plate {taxon_id}"
         try:
             reject_candidate(self.state_dir, taxon_id, reason)
         except CatalogError as exc:
+            self._decision(taxon_id, "error", f"Could not reject {name}: {exc}")
             self._send_json(HTTPStatus.CONFLICT, {"ok": False, "error": str(exc)})
             return
+        self._decision(taxon_id, "rejected", f"{name} rejected; it will not be published.")
         self._send_json(
             HTTPStatus.OK,
             {"ok": True, "status": "rejected", "taxon_id": taxon_id, "schema_version": 1},
         )
+
+    def _decision(self, taxon_id: int, outcome: str, message: str) -> None:
+        if self.on_decision is not None:
+            with suppress(Exception):
+                self.on_decision(taxon_id, outcome, message)
+
+    def _pending_common_name(self, taxon_id: int) -> str | None:
+        source = find_taxon_directory(self.state_dir / "pending", taxon_id)
+        if source is None:
+            return None
+        try:
+            manifest = read_json(source / "manifest.json")
+        except CatalogError:
+            return None
+        name = manifest.get("common_name") if isinstance(manifest, dict) else None
+        return name if isinstance(name, str) else None
 
     def _pending_taxon(self, request_path: str, suffix: str) -> int | None:
         """Parse the taxon id from /v1/pending/<taxon><suffix>, or None if it does not match."""
@@ -229,6 +256,7 @@ def serve_catalog(
     config: ControllerConfig,
     *,
     refresh_active_catalog: Callable[[], None] | None = None,
+    on_decision: Callable[[int, str, str], None] | None = None,
 ) -> None:
     config.catalog_dir.mkdir(parents=True, exist_ok=True)
     rebuild_index_logging_failures(config.catalog_dir)
@@ -242,6 +270,7 @@ def serve_catalog(
             "refresh_active_catalog": staticmethod(refresh_active_catalog)
             if refresh_active_catalog is not None
             else None,
+            "on_decision": staticmethod(on_decision) if on_decision is not None else None,
         },
     )
     server = ThreadingHTTPServer((config.bind_host, config.port), handler)

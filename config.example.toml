@@ -128,8 +128,12 @@ delivery_retry_minutes = 5
 max_delivery_attempts = 20
 
 # Keep real service URLs only in your private config.toml. Choose url or url_env, not both.
-# Events: discovery, generation_approved, terminal_error, degraded, recovered,
-# publication_error, publication_recovered, display_stale, display_recovered.
+# Events: discovery, generation_pending, generation_approved, review_decision,
+# terminal_error, degraded, recovered, publication_error, publication_recovered,
+# display_stale, display_recovered.
+# For phone approve/reject (see notify_base_url above), subscribe an ntfy
+# destination to generation_pending (the plate + buttons) and review_decision
+# (the confirmation pushed back after you tap).
 
 # [[notifications.destinations]]
 # name = "pushover"

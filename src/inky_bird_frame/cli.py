@@ -9,8 +9,8 @@ import shutil
 import signal
 import sys
 import threading
-from contextlib import nullcontext
-from datetime import date
+from contextlib import nullcontext, suppress
+from datetime import UTC, date, datetime
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 
@@ -572,7 +572,29 @@ def serve_command(args: argparse.Namespace) -> int:
         if _snapshot_path(config).exists():
             _write_active_catalog(config, list(_read_discovery_snapshot(config).species))
 
-    serve_catalog(config.controller, refresh_active_catalog=_refresh_active_catalog)
+    def _notify_decision(taxon_id: int, outcome: str, message: str) -> None:
+        # A phone action button is silent, so push a confirmation back to the same
+        # notifier. Best effort: enqueue then dispatch immediately.
+        titles = {
+            "approved": "✅ Plate approved",
+            "rejected": "🗑️ Plate rejected",
+            "error": "⚠️ Nothing to do",
+        }
+        safe_notify(
+            config,
+            NotificationEvent.REVIEW_DECISION,
+            dedupe_key=f"decision:{taxon_id}:{outcome}:{datetime.now(UTC).isoformat()}",
+            title=titles.get(outcome, "Plate update"),
+            body=message,
+        )
+        with suppress(Exception):
+            dispatch_notifications(config)
+
+    serve_catalog(
+        config.controller,
+        refresh_active_catalog=_refresh_active_catalog,
+        on_decision=_notify_decision,
+    )
     return 0
 
 

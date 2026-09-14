@@ -21,6 +21,7 @@ def _serving(
     active_catalog_path: Path,
     state_dir: Path,
     refresh_active_catalog: Callable[[], None] | None = None,
+    on_decision: Callable[[int, str, str], None] | None = None,
 ) -> Iterator[int]:
     handler = type(
         "TestCatalogRequestHandler",
@@ -32,6 +33,7 @@ def _serving(
             "refresh_active_catalog": staticmethod(refresh_active_catalog)
             if refresh_active_catalog is not None
             else None,
+            "on_decision": staticmethod(on_decision) if on_decision is not None else None,
         },
     )
     server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
@@ -346,6 +348,45 @@ class ServerTests(unittest.TestCase):
         self.assertTrue(payload["ok"])
         self.assertEqual(payload["taxon_id"], 7)
         self.assertEqual(payload["status"], "approved")
+
+    def test_decisions_push_confirmation_feedback(self) -> None:
+        from types import SimpleNamespace
+        from unittest.mock import patch
+
+        from inky_bird_frame.errors import CatalogError
+
+        decisions: list[tuple[int, str, str]] = []
+
+        def record(taxon: int, outcome: str, message: str) -> None:
+            decisions.append((taxon, outcome, message))
+
+        entry = SimpleNamespace(taxon_id=7, common_name="Held Bird")
+        with self._environment() as (_, catalog_dir, state_dir):
+            active = state_dir / "active-catalog.json"
+            active.write_text(json.dumps({"schema_version": 1, "species": []}))
+            _write_pending(state_dir, 8, "reject-me", with_portrait=False)
+
+            with (
+                patch("inky_bird_frame.server.approve_candidate", return_value=entry),
+                patch("inky_bird_frame.server.reject_candidate"),
+                _serving(catalog_dir, active, state_dir, on_decision=record) as port,
+            ):
+                _post(port, "/v1/pending/7/approve")
+                _post(port, "/v1/pending/8/reject")
+
+            with (
+                patch(
+                    "inky_bird_frame.server.approve_candidate",
+                    side_effect=CatalogError("No pending candidate exists for taxon 9"),
+                ),
+                _serving(catalog_dir, active, state_dir, on_decision=record) as port,
+            ):
+                _post(port, "/v1/pending/9/approve")
+
+        outcomes = [outcome for _, outcome, _ in decisions]
+        self.assertEqual(outcomes, ["approved", "rejected", "error"])
+        self.assertIn("Held Bird approved", decisions[0][2])
+        self.assertIn("Reject Me rejected", decisions[1][2])
 
     def test_reject_endpoint_passes_reason(self) -> None:
         from unittest.mock import patch

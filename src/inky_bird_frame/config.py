@@ -66,6 +66,9 @@ class NotificationEvent(StrEnum):
     DISCOVERY = "discovery"
     GENERATION_APPROVED = "generation_approved"
     GENERATION_PENDING = "generation_pending"
+    # Confirmation pushed back after a phone Approve/Reject, so the tap has visible
+    # feedback (ntfy http action buttons are silent on the phone otherwise).
+    REVIEW_DECISION = "review_decision"
     TERMINAL_ERROR = "terminal_error"
     DEGRADED = "degraded"
     RECOVERED = "recovered"
