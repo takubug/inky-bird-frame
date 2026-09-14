@@ -34,7 +34,10 @@ services:
       bootstrap:
         condition: service_completed_successfully
     ports:
-      - ${INKY_BIRD_PORT:-8793}:8793
+      # Default publishes on all interfaces; set INKY_BIRD_BIND (for example a
+      # tailnet address) to restrict the port to a trusted interface, since a
+      # Docker-published port bypasses a host UFW/iptables-INPUT firewall.
+      - ${INKY_BIRD_BIND:-0.0.0.0}:${INKY_BIRD_PORT:-8793}:8793
     healthcheck:
       test:
         - CMD
