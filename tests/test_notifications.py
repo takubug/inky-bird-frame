@@ -209,6 +209,33 @@ class NotificationTests(unittest.TestCase):
         )
         self.assertTrue(plain.startswith("ntfy://ntfy.example/topic?"))
 
+    def test_deliver_now_sends_directly_and_falls_back_to_the_queue(self) -> None:
+        from unittest.mock import patch
+
+        from inky_bird_frame.notifications import deliver_now
+
+        with TemporaryDirectory() as temporary:
+            config = self._config(temporary)
+            event = next(iter(config.notifications.destinations[0].events))
+
+            # Direct delivery: no reliance on the shared dispatcher, nothing queued.
+            with patch("inky_bird_frame.notifications._deliver") as deliver:
+                result = deliver_now(
+                    config, event, dedupe_key="d1", title="✅ Approved", body="done"
+                )
+            self.assertTrue(deliver.called)
+            self.assertGreaterEqual(int(str(result["delivered"])), 1)
+            self.assertFalse(result["queued"])
+            self.assertEqual(len(_read_state(notification_state_path(config)).pending), 0)
+
+            # On failure it falls back to the durable queue so nothing is lost.
+            with patch("inky_bird_frame.notifications._deliver", side_effect=RuntimeError("down")):
+                result = deliver_now(
+                    config, event, dedupe_key="d2", title="✅ Approved", body="done"
+                )
+            self.assertTrue(result["queued"])
+            self.assertGreaterEqual(len(_read_state(notification_state_path(config)).pending), 1)
+
     def test_attachment_survives_the_queue_round_trip(self) -> None:
         with TemporaryDirectory() as temporary:
             config = self._config(temporary)

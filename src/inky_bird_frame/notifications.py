@@ -346,6 +346,60 @@ def send_notification_test(config: AppConfig) -> dict[str, object]:
     return {"delivered": delivered, "failures": failures}
 
 
+def deliver_now(
+    config: AppConfig,
+    event: NotificationEvent,
+    *,
+    dedupe_key: str,
+    title: str,
+    body: str,
+) -> dict[str, object]:
+    """Deliver to subscribed destinations right now, bypassing the periodic dispatcher.
+
+    Interactive confirmations (a phone Approve/Reject) must land immediately, but
+    ``dispatch_notifications`` takes the dispatch lock non-blocking and backs off when
+    the scheduler holds it, deferring the message by a dispatch interval. Send directly
+    here; if a destination fails, fall back to the durable queue so it is retried
+    rather than lost. Meant for a single interactive destination — with several, a
+    partial failure can re-send to a destination that already succeeded.
+    """
+    if not config.notifications.enabled:
+        return {"delivered": 0, "failed": 0, "queued": False}
+    targets = [
+        destination
+        for destination in config.notifications.destinations
+        if event in destination.events
+    ]
+    if not targets:
+        return {"delivered": 0, "failed": 0, "queued": False}
+    now = datetime.now(UTC).replace(microsecond=0)
+    item = NotificationItem(
+        item_id=hashlib.sha256(f"{event.value}:{dedupe_key}".encode()).hexdigest(),
+        event=event,
+        title=title,
+        body=body,
+        created_at=now,
+        attempts=0,
+        next_attempt_at=now,
+        delivered_to=(),
+    )
+    delivered = 0
+    failed = 0
+    for destination in targets:
+        try:
+            _deliver(destination, item)
+        except Exception:  # Apprise plugins expose provider-specific exceptions.
+            failed += 1
+        else:
+            delivered += 1
+    queued = False
+    if failed:
+        queued = bool(
+            safe_notify(config, event, dedupe_key=dedupe_key, title=title, body=body).get("queued")
+        )
+    return {"delivered": delivered, "failed": failed, "queued": queued}
+
+
 def safe_notify(
     config: AppConfig,
     event: NotificationEvent,

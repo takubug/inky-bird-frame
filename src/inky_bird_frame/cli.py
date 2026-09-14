@@ -48,6 +48,7 @@ from .images import prepare_uploaded_image
 from .installation import InstallationRole, doctor, setup
 from .notifications import (
     check_display_heartbeat,
+    deliver_now,
     dispatch_notifications,
     notification_status,
     requeue_dead_letters,
@@ -573,22 +574,22 @@ def serve_command(args: argparse.Namespace) -> int:
             _write_active_catalog(config, list(_read_discovery_snapshot(config).species))
 
     def _notify_decision(taxon_id: int, outcome: str, message: str) -> None:
-        # A phone action button is silent, so push a confirmation back to the same
-        # notifier. Best effort: enqueue then dispatch immediately.
+        # A phone action button is silent, so push a confirmation back immediately.
+        # deliver_now sends directly instead of waiting on the shared dispatcher,
+        # which the scheduler can hold, so the tap gets feedback within a second.
         titles = {
             "approved": "✅ Plate approved",
             "rejected": "🗑️ Plate rejected",
             "error": "⚠️ Nothing to do",
         }
-        safe_notify(
-            config,
-            NotificationEvent.REVIEW_DECISION,
-            dedupe_key=f"decision:{taxon_id}:{outcome}:{datetime.now(UTC).isoformat()}",
-            title=titles.get(outcome, "Plate update"),
-            body=message,
-        )
         with suppress(Exception):
-            dispatch_notifications(config)
+            deliver_now(
+                config,
+                NotificationEvent.REVIEW_DECISION,
+                dedupe_key=f"decision:{taxon_id}:{outcome}:{datetime.now(UTC).isoformat()}",
+                title=titles.get(outcome, "Plate update"),
+                body=message,
+            )
 
     serve_catalog(
         config.controller,
