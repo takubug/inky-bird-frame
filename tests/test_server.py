@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import threading
 import unittest
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from http.client import HTTPConnection
 from http.server import ThreadingHTTPServer
@@ -16,7 +16,12 @@ PNG_BYTES = b"\x89PNG\r\n\x1a\n" + b"\x00" * 16
 
 
 @contextmanager
-def _serving(catalog_dir: Path, active_catalog_path: Path, state_dir: Path) -> Iterator[int]:
+def _serving(
+    catalog_dir: Path,
+    active_catalog_path: Path,
+    state_dir: Path,
+    refresh_active_catalog: Callable[[], None] | None = None,
+) -> Iterator[int]:
     handler = type(
         "TestCatalogRequestHandler",
         (CatalogRequestHandler,),
@@ -24,6 +29,9 @@ def _serving(catalog_dir: Path, active_catalog_path: Path, state_dir: Path) -> I
             "catalog_dir": catalog_dir,
             "active_catalog_path": active_catalog_path,
             "state_dir": state_dir,
+            "refresh_active_catalog": staticmethod(refresh_active_catalog)
+            if refresh_active_catalog is not None
+            else None,
         },
     )
     server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
@@ -45,6 +53,35 @@ def _get(port: int, path: str) -> tuple[int, dict[str, str], bytes]:
         return response.status, dict(response.getheaders()), response.read()
     finally:
         connection.close()
+
+
+def _post(port: int, path: str) -> tuple[int, bytes]:
+    connection = HTTPConnection("127.0.0.1", port, timeout=5)
+    try:
+        connection.request("POST", path, headers={"Content-Length": "0"})
+        response = connection.getresponse()
+        return response.status, response.read()
+    finally:
+        connection.close()
+
+
+def _write_pending(state_dir: Path, taxon_id: int, slug: str, *, with_portrait: bool) -> Path:
+    pending = state_dir / "pending" / f"{taxon_id}-{slug}"
+    pending.mkdir(parents=True)
+    (pending / "manifest.json").write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "status": "pending",
+                "taxon_id": taxon_id,
+                "common_name": slug.replace("-", " ").title(),
+                "slug": slug,
+            }
+        )
+    )
+    if with_portrait:
+        (pending / "portrait.png").write_bytes(PNG_BYTES)
+    return pending
 
 
 class ServerTests(unittest.TestCase):
@@ -253,6 +290,98 @@ class ServerTests(unittest.TestCase):
             json.loads(body),
             {"ok": True, "approved_species": 0, "active_species": 0, "schema_version": 1},
         )
+
+    def test_pending_list_reports_pending_candidates(self) -> None:
+        with self._environment() as (_, catalog_dir, state_dir):
+            _write_pending(state_dir, 7, "held-bird", with_portrait=True)
+            active = state_dir / "active-catalog.json"
+            active.write_text(json.dumps({"schema_version": 1, "species": []}))
+            with _serving(catalog_dir, active, state_dir) as port:
+                status, _, body = _get(port, "/v1/pending")
+
+        self.assertEqual(status, 200)
+        self.assertEqual(
+            json.loads(body),
+            {"pending": [{"taxon_id": 7, "common_name": "Held Bird"}], "schema_version": 1},
+        )
+
+    def test_pending_portrait_is_served_and_missing_is_not_found(self) -> None:
+        with self._environment() as (_, catalog_dir, state_dir):
+            _write_pending(state_dir, 7, "held-bird", with_portrait=True)
+            active = state_dir / "active-catalog.json"
+            active.write_text(json.dumps({"schema_version": 1, "species": []}))
+            with _serving(catalog_dir, active, state_dir) as port:
+                found_status, headers, body = _get(port, "/v1/pending/7/portrait.png")
+                missing_status, _, _ = _get(port, "/v1/pending/999/portrait.png")
+
+        self.assertEqual(found_status, 200)
+        self.assertEqual(headers.get("Content-Type"), "image/png")
+        self.assertEqual(body, PNG_BYTES)
+        self.assertEqual(missing_status, 404)
+
+    def test_approve_endpoint_approves_and_refreshes_active_catalog(self) -> None:
+        from types import SimpleNamespace
+        from unittest.mock import patch
+
+        refreshed: list[bool] = []
+        entry = SimpleNamespace(taxon_id=7, common_name="Held Bird")
+        with self._environment() as (_, catalog_dir, state_dir):
+            active = state_dir / "active-catalog.json"
+            active.write_text(json.dumps({"schema_version": 1, "species": []}))
+            with (
+                patch("inky_bird_frame.server.approve_candidate", return_value=entry) as approve,
+                _serving(
+                    catalog_dir,
+                    active,
+                    state_dir,
+                    refresh_active_catalog=lambda: refreshed.append(True),
+                ) as port,
+            ):
+                status, body = _post(port, "/v1/pending/7/approve")
+
+        self.assertEqual(status, 200)
+        approve.assert_called_once_with(state_dir, catalog_dir, 7)
+        self.assertEqual(refreshed, [True])
+        payload = json.loads(body)
+        self.assertTrue(payload["ok"])
+        self.assertEqual(payload["taxon_id"], 7)
+        self.assertEqual(payload["status"], "approved")
+
+    def test_reject_endpoint_passes_reason(self) -> None:
+        from unittest.mock import patch
+
+        with self._environment() as (_, catalog_dir, state_dir):
+            active = state_dir / "active-catalog.json"
+            active.write_text(json.dumps({"schema_version": 1, "species": []}))
+            with (
+                patch("inky_bird_frame.server.reject_candidate") as reject,
+                _serving(catalog_dir, active, state_dir) as port,
+            ):
+                status, body = _post(port, "/v1/pending/7/reject?reason=blurry%20eye")
+
+        self.assertEqual(status, 200)
+        reject.assert_called_once_with(state_dir, 7, "blurry eye")
+        self.assertEqual(json.loads(body)["status"], "rejected")
+
+    def test_approve_conflict_is_reported_without_crashing(self) -> None:
+        from unittest.mock import patch
+
+        from inky_bird_frame.errors import CatalogError
+
+        with self._environment() as (_, catalog_dir, state_dir):
+            active = state_dir / "active-catalog.json"
+            active.write_text(json.dumps({"schema_version": 1, "species": []}))
+            with (
+                patch(
+                    "inky_bird_frame.server.approve_candidate",
+                    side_effect=CatalogError("No pending candidate exists for taxon 7"),
+                ),
+                _serving(catalog_dir, active, state_dir) as port,
+            ):
+                status, body = _post(port, "/v1/pending/7/approve")
+
+        self.assertEqual(status, 409)
+        self.assertFalse(json.loads(body)["ok"])
 
 
 if __name__ == "__main__":

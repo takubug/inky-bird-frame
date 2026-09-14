@@ -56,6 +56,14 @@ retry_initial_minutes = 30
 retry_max_minutes = 1440
 # Licensed photos can appear later, so an insufficient set is deferred, not failed forever.
 insufficient_references_retry_minutes = 10080
+# Optional. A URL where this controller is reachable from the device that receives
+# notifications (for example a private VPN address or a reverse-proxy hostname).
+# When set, a pending-plate notification carries the plate image inline plus
+# one-tap Approve/Reject buttons that POST to /v1/pending/<taxon>/approve|reject.
+# The endpoints are unauthenticated, so only set this when the controller is
+# reachable only from trusted devices (a private network), and firewall the port
+# accordingly. Left unset, pending notifications stay plain text with CLI hints.
+# notify_base_url = "http://controller.internal:8793"
 
 [research]
 # Successful profiles are cached by taxon, so retries of the artwork do not research the

@@ -239,6 +239,26 @@ def _candidate_marker(candidate_dir: str) -> str:
         return ""
 
 
+def _pending_notification_links(
+    base_url: str | None, taxon_id: int
+) -> tuple[str | None, str | None]:
+    """Build the pending plate's inline-image URL and ntfy Approve/Reject actions.
+
+    Returns (None, None) when no controller base URL is configured, so the
+    notification stays plain text with CLI instructions.
+    """
+    if not base_url:
+        return None, None
+    root = f"{base_url.rstrip('/')}/v1/pending/{taxon_id}"
+    image_url = f"{root}/portrait.png"
+    # ntfy X-Actions short form; clear=true dismisses the notification on tap.
+    actions = (
+        f"http, Approve, {root}/approve, method=POST, clear=true; "
+        f"http, Reject, {root}/reject, method=POST, clear=true"
+    )
+    return image_url, actions
+
+
 def generate_command(args: argparse.Namespace) -> int:
     config = _config(args)
     try:
@@ -288,17 +308,32 @@ def generate_command(args: argparse.Namespace) -> int:
             # later regeneration of the same bird is not deduplicated into silence.
             candidate_dir = item.get("candidate_dir")
             marker = _candidate_marker(candidate_dir) if isinstance(candidate_dir, str) else ""
+            base_url = config.controller.notify_base_url
+            image_url, actions = _pending_notification_links(base_url, taxon_id)
+            if image_url is not None:
+                # The phone gets the plate inline plus one-tap Approve/Reject
+                # buttons that post back to the controller; no shell needed.
+                body = (
+                    f"A new {common_name} plate passed automated review and is waiting for "
+                    "you. Tap Approve or Reject below, or open the plate to see it full size."
+                )
+                attachment: str | None = None
+            else:
+                body = (
+                    f"A new {common_name} plate passed automated review and is waiting for "
+                    f"you. Approve: inky-bird-frame approve {taxon_id}. "
+                    f'Reject: inky-bird-frame reject {taxon_id} --reason "...".'
+                )
+                attachment = portrait if isinstance(portrait, str) else None
             safe_notify(
                 config,
                 NotificationEvent.GENERATION_PENDING,
                 dedupe_key=f"pending:{taxon_id}:{marker}",
                 title=f"{common_name} plate awaiting your approval",
-                body=(
-                    f"A new {common_name} plate passed automated review and is waiting for "
-                    f"you. Approve: inky-bird-frame approve {taxon_id}. "
-                    f'Reject: inky-bird-frame reject {taxon_id} --reason "...".'
-                ),
-                attachment=portrait if isinstance(portrait, str) else None,
+                body=body,
+                attachment=attachment,
+                image_url=image_url,
+                actions=actions,
             )
     failures = result.get("failures")
     transient_failures = []
@@ -523,7 +558,21 @@ def status_command(args: argparse.Namespace) -> int:
 
 
 def serve_command(args: argparse.Namespace) -> int:
-    serve_catalog(_config(args, load_secrets=False).controller)
+    config = _config(args, load_secrets=False)
+
+    def _refresh_active_catalog() -> None:
+        # A phone approval should reach the frame promptly. Rebuild the active
+        # catalog from the last discovery snapshot on disk, with no network call.
+        from .controller import (
+            _read_discovery_snapshot,
+            _snapshot_path,
+            _write_active_catalog,
+        )
+
+        if _snapshot_path(config).exists():
+            _write_active_catalog(config, list(_read_discovery_snapshot(config).species))
+
+    serve_catalog(config.controller, refresh_active_catalog=_refresh_active_catalog)
     return 0
 
 

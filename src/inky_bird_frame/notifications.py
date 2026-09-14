@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING
-from urllib.parse import urlsplit
+from urllib.parse import quote, urlsplit
 from uuid import uuid4
 
 from .config import AppConfig, NotificationDestination, NotificationEvent
@@ -38,6 +38,12 @@ class NotificationItem:
     delivered_to: tuple[str, ...]
     last_error: str | None = None
     attachment: str | None = None
+    # ntfy-only rich extras: an image URL shown inline and opened on tap, and an
+    # ntfy X-Actions spec string (Approve/Reject buttons). Other providers ignore
+    # them. image_url is a URL the ntfy server fetches, so it needs no upload
+    # cache and never hits the attachment-refused fallback.
+    image_url: str | None = None
+    actions: str | None = None
 
     def as_dict(self) -> dict[str, object]:
         return {
@@ -51,6 +57,8 @@ class NotificationItem:
             "delivered_to": list(self.delivered_to),
             "last_error": self.last_error,
             "attachment": self.attachment,
+            "image_url": self.image_url,
+            "actions": self.actions,
         }
 
 
@@ -126,6 +134,8 @@ def enqueue_notification(
     title: str,
     body: str,
     attachment: str | None = None,
+    image_url: str | None = None,
+    actions: str | None = None,
     now: datetime | None = None,
 ) -> bool:
     if not config.notifications.enabled:
@@ -153,6 +163,8 @@ def enqueue_notification(
             next_attempt_at=current,
             delivered_to=(),
             attachment=attachment,
+            image_url=image_url,
+            actions=actions,
         )
         _write_state(notification_state_path(config), state, pending=(*state.pending, item))
     return True
@@ -245,6 +257,8 @@ def _deliver_notification_state(
             delivered_to=tuple(delivered_to),
             last_error="; ".join(errors) if errors else "No configured destination accepts event",
             attachment=item.attachment,
+            image_url=item.image_url,
+            actions=item.actions,
         )
         if attempts >= config.notifications.max_delivery_attempts:
             dead_letters.append(updated)
@@ -340,6 +354,8 @@ def safe_notify(
     title: str,
     body: str,
     attachment: str | None = None,
+    image_url: str | None = None,
+    actions: str | None = None,
 ) -> dict[str, object]:
     try:
         queued = enqueue_notification(
@@ -349,6 +365,8 @@ def safe_notify(
             title=title,
             body=body,
             attachment=attachment,
+            image_url=image_url,
+            actions=actions,
         )
         return {
             "queued": queued,
@@ -605,8 +623,37 @@ def record_recovery(
     return result
 
 
+def _ntfy_rich_url(base_url: str, *, image_url: str | None, actions: str | None) -> str:
+    """Append ntfy inline-image and action-button query params to a base ntfy URL.
+
+    Apprise's ntfy plugin turns ``attach``/``click``/``actions`` query args into
+    the ntfy publish's inline attachment URL, tap-through link, and X-Actions
+    buttons, so one ordinary notify() carries the whole rich message.
+    """
+    extras: list[str] = []
+    if image_url:
+        extras.append(f"attach={quote(image_url, safe='')}")
+        extras.append(f"click={quote(image_url, safe='')}")
+    if actions:
+        extras.append(f"actions={quote(actions, safe='')}")
+    if not extras:
+        return base_url
+    separator = "&" if urlsplit(base_url).query else "?"
+    return base_url + separator + "&".join(extras)
+
+
 def _deliver(destination: NotificationDestination, item: NotificationItem) -> None:
     notifier = _new_notifier()
+    if urlsplit(destination.url).scheme.startswith("ntfy") and (item.image_url or item.actions):
+        # ntfy renders the image inline and shows the Approve/Reject buttons; the
+        # image is fetched from the controller by URL, so there is no upload to
+        # refuse and no text-only fallback for the gate to fall through.
+        rich_url = _ntfy_rich_url(destination.url, image_url=item.image_url, actions=item.actions)
+        if not notifier.add(rich_url) or len(notifier) != 1:
+            raise ValueError("invalid Apprise service URL")
+        if notifier.notify(title=item.title, body=item.body) is not True:
+            raise RuntimeError("provider did not confirm delivery")
+        return
     if not notifier.add(destination.url) or len(notifier) != 1:
         raise ValueError("invalid Apprise service URL")
     if item.attachment:
@@ -695,6 +742,12 @@ def _parse_item(raw: object, source: Path) -> NotificationItem:
     attachment = raw.get("attachment")
     if attachment is not None and not isinstance(attachment, str):
         raise CatalogError(f"Invalid notification attachment: {source}")
+    image_url = raw.get("image_url")
+    actions = raw.get("actions")
+    if (image_url is not None and not isinstance(image_url, str)) or (
+        actions is not None and not isinstance(actions, str)
+    ):
+        raise CatalogError(f"Invalid notification action metadata: {source}")
     if (
         not isinstance(item_id, str)
         or not item_id
@@ -728,6 +781,8 @@ def _parse_item(raw: object, source: Path) -> NotificationItem:
         delivered_to=tuple(delivered_to),
         last_error=last_error,
         attachment=attachment,
+        image_url=image_url,
+        actions=actions,
     )
 
 

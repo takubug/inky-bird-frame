@@ -136,7 +136,9 @@ class CliTests(unittest.TestCase):
 
         self.assertEqual(result, 0)
         load.assert_called_once_with(Path("instance.toml"), load_secrets=False)
-        serve.assert_called_once_with(controller)
+        serve.assert_called_once()
+        self.assertIs(serve.call_args.args[0], controller)
+        self.assertTrue(callable(serve.call_args.kwargs["refresh_active_catalog"]))
 
     def test_seed_supports_year_window_and_overrides(self) -> None:
         args = build_parser().parse_args(
@@ -385,12 +387,15 @@ rotation_mode = "shuffle_bag"
             "outstanding_retry_count": 0,
         }
         with (
-            patch("inky_bird_frame.cli._config"),
+            patch("inky_bird_frame.cli._config") as config,
             patch("inky_bird_frame.cli.run_generation_cycle", return_value=result),
             patch("inky_bird_frame.cli.safe_notify") as notify,
             patch("inky_bird_frame.cli.safe_record_recovery"),
             redirect_stdout(io.StringIO()),
         ):
+            # No controller base URL: the notification stays plain text with the
+            # CLI approve/reject instructions and the local-file attachment.
+            config.return_value.controller.notify_base_url = None
             generate_command(Namespace())
 
         self.assertEqual(notify.call_count, 1)
@@ -399,6 +404,48 @@ rotation_mode = "shuffle_bag"
         self.assertTrue(kwargs["dedupe_key"].startswith("pending:7:"))
         self.assertIn("approve 7", kwargs["body"])
         self.assertEqual(kwargs["attachment"], "/state/pending/7-held-bird/portrait.png")
+        self.assertIsNone(kwargs["image_url"])
+        self.assertIsNone(kwargs["actions"])
+
+    def test_generate_pending_notification_carries_inline_image_and_action_buttons(self) -> None:
+        result = {
+            "published_pending": [],
+            "generated": [],
+            "awaiting_approval": [
+                {
+                    "taxon_id": 7,
+                    "common_name": "Held Bird",
+                    "candidate_dir": "/state/pending/7-held-bird",
+                    "portrait": "/state/pending/7-held-bird/portrait.png",
+                }
+            ],
+            "failures": [],
+            "deferred_count": 0,
+            "outstanding_retry_count": 0,
+        }
+        with (
+            patch("inky_bird_frame.cli._config") as config,
+            patch("inky_bird_frame.cli.run_generation_cycle", return_value=result),
+            patch("inky_bird_frame.cli.safe_notify") as notify,
+            patch("inky_bird_frame.cli.safe_record_recovery"),
+            redirect_stdout(io.StringIO()),
+        ):
+            config.return_value.controller.notify_base_url = "http://100.95.120.97:8793/"
+            generate_command(Namespace())
+
+        kwargs = notify.call_args.kwargs
+        # Inline image served by the controller; no local-file upload to refuse.
+        self.assertEqual(kwargs["image_url"], "http://100.95.120.97:8793/v1/pending/7/portrait.png")
+        self.assertIsNone(kwargs["attachment"])
+        # One-tap Approve/Reject buttons posting back to the controller.
+        self.assertIn(
+            "http, Approve, http://100.95.120.97:8793/v1/pending/7/approve", kwargs["actions"]
+        )
+        self.assertIn(
+            "http, Reject, http://100.95.120.97:8793/v1/pending/7/reject", kwargs["actions"]
+        )
+        self.assertIn("method=POST", kwargs["actions"])
+        self.assertNotIn("approve 7", kwargs["body"])
 
     def test_generate_does_not_recover_while_species_remain_deferred(self) -> None:
         result = {

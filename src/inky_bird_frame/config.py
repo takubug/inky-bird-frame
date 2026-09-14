@@ -123,6 +123,11 @@ class ControllerConfig:
     retry_initial_minutes: int = 30
     retry_max_minutes: int = 1440
     insufficient_references_retry_minutes: int = 10080
+    # Phone-reachable base URL of this controller (for example a tailnet address
+    # like "http://100.95.120.97:8793"). When set, a pending-plate notification
+    # carries the plate image inline plus Approve/Reject action buttons that post
+    # back to this controller. Left unset, notifications stay plain text.
+    notify_base_url: str | None = None
 
 
 @dataclass(frozen=True)
@@ -632,6 +637,9 @@ def load_config(path: Path, *, load_secrets: bool = True) -> AppConfig:
             retry_max_minutes=retry_max_minutes,
             insufficient_references_retry_minutes=_optional_integer(
                 controller, "insufficient_references_retry_minutes", default=10080
+            ),
+            notify_base_url=(
+                _string(controller, "notify_base_url") if "notify_base_url" in controller else None
             ),
         ),
         display_node=DisplayNodeConfig(

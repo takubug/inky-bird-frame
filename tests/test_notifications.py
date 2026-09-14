@@ -151,6 +151,64 @@ class NotificationTests(unittest.TestCase):
         self.assertNotIn("attach", calls[1])
         self.assertIn("could not be attached", str(calls[1]["body"]))
 
+    def test_ntfy_delivery_carries_inline_image_and_action_buttons(self) -> None:
+        from datetime import UTC, datetime
+        from unittest.mock import patch
+
+        from inky_bird_frame.config import NotificationDestination
+        from inky_bird_frame.notifications import NotificationItem, _deliver, _ntfy_rich_url
+
+        added: list[str] = []
+        notified: list[dict[str, object]] = []
+
+        class _Notifier:
+            def add(self, url: str) -> bool:
+                added.append(url)
+                return True
+
+            def __len__(self) -> int:
+                return 1
+
+            def notify(self, **kwargs: object) -> bool:
+                notified.append(kwargs)
+                return True
+
+        now = datetime.now(UTC)
+        item = NotificationItem(
+            item_id="x",
+            event=NotificationEvent.GENERATION_PENDING,
+            title="Held Bird plate awaiting your approval",
+            body="Tap Approve or Reject.",
+            created_at=now,
+            attempts=0,
+            next_attempt_at=now,
+            delivered_to=(),
+            image_url="http://host:8793/v1/pending/7/portrait.png",
+            actions="http, Approve, http://host:8793/v1/pending/7/approve, method=POST, clear=true",
+        )
+        destination = NotificationDestination(
+            name="phone",
+            url="ntfy://ntfy.example/topic",
+            events=(NotificationEvent.GENERATION_PENDING,),
+        )
+        with patch("inky_bird_frame.notifications._new_notifier", return_value=_Notifier()):
+            _deliver(destination, item)
+
+        # The delivered URL carries the inline image (attach + click) and buttons.
+        self.assertEqual(len(added), 1)
+        self.assertIn("attach=http%3A%2F%2Fhost%3A8793%2Fv1%2Fpending%2F7%2Fportrait.png", added[0])
+        self.assertIn("click=", added[0])
+        self.assertIn("actions=", added[0])
+        # No local-file upload path is used, so nothing can be refused as an attachment.
+        self.assertEqual(len(notified), 1)
+        self.assertNotIn("attach", notified[0])
+
+        # A base URL with no query gets "?"; extras are URL-encoded.
+        plain = _ntfy_rich_url(
+            "ntfy://ntfy.example/topic", image_url="http://x/y.png", actions=None
+        )
+        self.assertTrue(plain.startswith("ntfy://ntfy.example/topic?"))
+
     def test_attachment_survives_the_queue_round_trip(self) -> None:
         with TemporaryDirectory() as temporary:
             config = self._config(temporary)
