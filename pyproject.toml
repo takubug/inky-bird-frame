@@ -19,7 +19,7 @@ claude = [
     "google-genai>=1.28",
 ]
 inky = [
-    "inky>=2.4",
+    "inky>=2.5",
 ]
 dev = [
     "anthropic>=0.116",

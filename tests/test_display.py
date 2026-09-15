@@ -29,6 +29,13 @@ class FakeDisplay:
         self.show_count += 1
 
 
+class RefreshAwareDisplay(FakeDisplay):
+    """A driver whose show() already waits for the refresh (inky >= 2.5)."""
+
+    def _refresh_wait(self, timeout: float = 65.0) -> None:  # marker method
+        raise AssertionError("_refresh_wait is only a capability marker in tests")
+
+
 class DisplayTests(unittest.TestCase):
     def test_auto_detection_rejects_unknown_geometry(self) -> None:
         module = SimpleNamespace(auto=lambda: FakeDisplay(600, 400))
@@ -81,6 +88,30 @@ class DisplayTests(unittest.TestCase):
                 show_on_inky(path, display=display)
 
         self.assertEqual(display.show_count, 0)
+
+    def test_skips_app_busy_poll_when_driver_waits_for_refresh(self) -> None:
+        display = RefreshAwareDisplay(*HARDWARE_SIZE)
+        with TemporaryDirectory() as temporary:
+            path = Path(temporary) / "display.png"
+            Image.new("RGB", HARDWARE_SIZE, "navy").save(path)
+
+            with patch("inky_bird_frame.display.wait_for_panel_idle") as waiter:
+                show_on_inky(path, display=display)
+
+        waiter.assert_not_called()
+        self.assertEqual(display.show_count, 1)
+
+    def test_uses_app_busy_poll_when_driver_returns_early(self) -> None:
+        display = FakeDisplay(*HARDWARE_SIZE)  # no _refresh_wait: pre-2.5 fallback
+        with TemporaryDirectory() as temporary:
+            path = Path(temporary) / "display.png"
+            Image.new("RGB", HARDWARE_SIZE, "navy").save(path)
+
+            with patch("inky_bird_frame.display.wait_for_panel_idle", return_value=0.0) as waiter:
+                show_on_inky(path, display=display)
+
+        waiter.assert_called_once_with(display)
+        self.assertEqual(display.show_count, 1)
 
 
 if __name__ == "__main__":

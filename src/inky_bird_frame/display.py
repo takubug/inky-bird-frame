@@ -15,12 +15,19 @@ from .images import HARDWARE_SIZE, PAPER_COLOR, SUPPORTED_HARDWARE_SIZES
 
 logger = logging.getLogger(__name__)
 
-# inky's show() waits at most 40 s on the BUSY line and then returns with a
-# warning as if the refresh had finished. A 13.3-inch Spectra 6 refresh already
-# takes ~35 s warm and stretches well past 40 s in the cold, so on a battery
-# display node that powers off shortly after show() returns, the cut lands
-# mid-refresh and the previous plate stays on the glass. Keep polling BUSY
-# until the panel is genuinely idle before reporting the update as sent.
+# Fallback BUSY wait for inky < 2.5 (and any driver whose show() returns before
+# the refresh finishes). Those show() calls wait at most ~40 s on BUSY and then
+# return as if done; a 13.3-inch Spectra 6 refresh takes ~35 s warm and stretches
+# past 40 s cold, so on a battery node that powers off shortly after show(), the
+# cut lands mid-refresh and the previous plate stays on the glass. For such
+# drivers we keep polling BUSY until the panel is genuinely idle.
+#
+# inky >= 2.5 fixed the EL133UF1 refresh wait (see _driver_waits_for_refresh):
+# its show() now polls BUSY with the correct active-LOW polarity until the
+# refresh completes, then powers the panel off. For that driver this app-level
+# poll is skipped entirely -- it is redundant, and this module's ACTIVE=busy
+# probe (which mirrored the old, buggy driver polarity) would misread the
+# already-idle line as busy and block until PANEL_SETTLE_TIMEOUT_SECONDS.
 PANEL_SETTLE_TIMEOUT_SECONDS = 300.0
 PANEL_SETTLE_POLL_SECONDS = 0.5
 # The BUSY line rises only a moment after the refresh command; a poll that
@@ -99,10 +106,28 @@ def show_on_inky(
         raise ValueError(f"unsupported Inky display size {expected_size}")
     active_display.set_image(_fit_canonical_image(image, expected_size))
     active_display.show()
-    settled = wait_for_panel_idle(active_display)
-    if settled:
-        logger.info("panel settled %.1fs after show() returned", settled)
+    if _driver_waits_for_refresh(active_display):
+        logger.debug("driver show() waited for the refresh; skipping app-level BUSY poll")
+    else:
+        settled = wait_for_panel_idle(active_display)
+        if settled:
+            logger.info("panel settled %.1fs after show() returned", settled)
     return expected_size
+
+
+def _driver_waits_for_refresh(display: object) -> bool:
+    """True when the inky driver's own show() blocks until the refresh completes.
+
+    inky >= 2.5 rewrote the EL133UF1 refresh wait, adding ``_refresh_wait``:
+    show() polls BUSY with the correct active-LOW polarity until the refresh
+    finishes, then powers the panel off. For those drivers the panel is already
+    idle and powered off when show() returns, so an app-level BUSY re-poll is
+    redundant -- and this module's ACTIVE=busy probe would misread the idle line
+    as busy and block until the timeout. Trust show() instead; battery-cycle.sh
+    still holds a grace period before the Pi powers off. Older inky and other
+    panels (e.g. the 7-inch) keep the fallback wait below.
+    """
+    return hasattr(display, "_refresh_wait")
 
 
 def _panel_busy_probe(display: object) -> Callable[[], bool] | None:
