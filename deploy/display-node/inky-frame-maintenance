@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+# PiSugar double tap: enter maintenance mode. Holds the Pi up now and on every
+# future boot (STAY_AWAKE) until a long tap clears it and powers down.
+# pisugar-server runs this as root; the app runs as inkybird.
+set -uo pipefail
+APP_DIR=/home/inkybird/inky-bird-frame
+FLAG="$APP_DIR/STAY_AWAKE"          # persistent: battery-cycle skips render+poweroff while present
+HOLD=/run/inky-frame-hold          # this boot only (tmpfs): cancels a pending poweroff
+NTFY_URL="https://ntfy.oasurgery.com.au/inky-bird-frame-kelp-lantern-drift"
+log() { logger -t inky-frame-maint "$*"; echo "$*"; }
+notify() { curl -fsS -m 15 -H "Title: $1" -H "Tags: $2" -d "$3" "$NTFY_URL" >/dev/null 2>&1 || true; }
+runuser -u inkybird -- touch "$FLAG"
+touch "$HOLD"
+batt=$(printf 'get battery\n' | nc -q1 127.0.0.1 8423 2>/dev/null | grep -oE '[0-9]+' | head -1)
+log "double-tap: maintenance ON (STAY_AWAKE set); long-tap to shut down and resume the daily cycle."
+notify "Inky Bird Frame: maintenance ON" "wrench" "Held awake for maintenance. Long-tap to shut down and return to the daily cycle. Battery ${batt:-?}%."

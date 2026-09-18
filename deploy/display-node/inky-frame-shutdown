@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+# PiSugar long tap: clear maintenance (remove STAY_AWAKE) and power down, so the
+# next PiSugar wake resumes the normal daily render-then-sleep cycle.
+# pisugar-server runs this as root.
+set -uo pipefail
+APP_DIR=/home/inkybird/inky-bird-frame
+FLAG="$APP_DIR/STAY_AWAKE"
+NTFY_URL="https://ntfy.oasurgery.com.au/inky-bird-frame-kelp-lantern-drift"
+log() { logger -t inky-frame-shutdown "$*"; echo "$*"; }
+notify() { curl -fsS -m 15 -H "Title: $1" -H "Tags: $2" -d "$3" "$NTFY_URL" >/dev/null 2>&1 || true; }
+rm -f "$FLAG"
+batt=$(printf 'get battery\n' | nc -q1 127.0.0.1 8423 2>/dev/null | grep -oE '[0-9]+' | head -1)
+log "long-tap: maintenance cleared, powering off; next wake = normal daily cycle."
+notify "Inky Bird Frame: shutting down" "electric_plug" "Maintenance cleared; powering down. The daily cycle resumes at the next 05:00 wake. Battery ${batt:-?}%."
+sync
+/sbin/poweroff
