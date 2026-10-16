@@ -1,70 +1,84 @@
 {
-  "approved_at": "2026-07-13T05:55:39+00:00",
+  "approved_at": "2026-09-16T00:18:58+00:00",
   "assets": {
     "display": {
       "filename": "display.png",
-      "sha256": "4652f0b3a9401392ef0ea3cc376bc20db112090785efbee066830c9849344d7e"
+      "sha256": "7e526ba3f2c6b4176c16a7a01ce9781b723b5f77c2f4bfc3fbc497d15e002169"
     },
     "portrait": {
       "filename": "portrait.png",
-      "sha256": "2e0b58890600fe71d9638093235435fafd82416292a141722248e1c75df2528a"
+      "sha256": "701ddd9291e93e10bf29e42c3aa49a5b3f2e17c97cf3194d2e68ff08d31e9147"
     }
   },
   "common_name": "Osprey",
   "generation": {
-    "attempt": 1,
-    "generated_at": "2026-07-13T05:55:39+00:00",
-    "generator": "Codex subscription / built-in gpt-image-2",
+    "attempt": 2,
+    "generated_at": "2026-09-16T00:09:31+00:00",
+    "generator": "Claude API (claude-sonnet-5) research and review / Gemini (gemini-3-pro-image-preview) illustration with composited labels",
     "max_attempts": 3,
-    "prompt_version": "field-journal-v2"
+    "prompt_version": "field-journal-v3"
   },
   "profile": {
-    "behavior": "Diurnal fish-eating raptor; searches over water, may hover briefly, then dives feet-first to seize fish.",
+    "behavior": "Hunts almost exclusively by plunge-diving feet-first into water to catch fish, often hovering briefly before the strike; carries prey head-forward for aerodynamic flight; migratory across much of its range, with some populations traveling thousands of kilometers between breeding and wintering grounds.",
     "common_name": "Osprey",
     "family": "Pandionidae",
     "field_marks": [
-      "Slender, large raptor with long, narrow wings and long legs",
-      "Dark brown upperparts sharply contrast with mostly white underparts",
-      "White head marked by a broad dark-brown stripe through each eye",
-      "Black, strongly hooked bill; pale blue-gray feet with long curved talons",
-      "In flight, wings show a distinct wrist kink forming an M-shape from below",
-      "Pale underwings show dark wrist patches and barred flight feathers"
+      "Dark brown upperparts contrasting with mostly white underparts and head",
+      "Distinctive dark eye-stripe extending from bill through the eye to the nape",
+      "Long, narrow wings with a pronounced dark carpal patch, often held bowed or crooked in flight (M-shape)",
+      "White crown and throat with a mottled dark brown necklace band across the chest, more pronounced in females",
+      "Sharply hooked black bill and pale yellow eyes",
+      "Long, bare, pale bluish-grey legs with reversible outer toes and spiny footpads for gripping fish"
     ],
-    "habitat": "Freshwater, coastal, and brackish waters with abundant fish and safe open nesting structures; occurs around lakes, rivers, ponds, marshes, estuaries, reservoirs, and reefs.",
+    "habitat": "Found near rivers, lakes, reservoirs, coastal estuaries, and other bodies of water with abundant fish; requires nearby tall trees, cliffs, or man-made structures for nesting and perching.",
     "measurements": {
-      "length": "54\u201358 cm",
-      "weight": "1.4\u20132.0 kg",
-      "wingspan": "150\u2013180 cm"
+      "length": "53-62 cm (21-24 in)",
+      "weight": "1.2-2 kg (2.6-4.4 lb)",
+      "wingspan": "127-180 cm (50-71 in)"
     },
     "palette": [
       "dark brown",
       "white",
+      "pale grey",
       "black",
-      "pale blue-gray",
-      "yellow to orange"
+      "pale yellow"
     ],
     "scientific_name": "Pandion haliaetus",
     "sources": [
       {
-        "title": "Osprey Identification \u2014 All About Birds, Cornell Lab of Ornithology",
+        "title": "Osprey Identification, All About Birds",
         "url": "https://www.allaboutbirds.org/guide/Osprey/id"
       },
       {
-        "title": "Pandion haliaetus (osprey) \u2014 Animal Diversity Web",
+        "title": "Osprey Overview, All About Birds",
+        "url": "https://www.allaboutbirds.org/guide/Osprey/overview"
+      },
+      {
+        "title": "Osprey, Audubon Field Guide",
+        "url": "https://www.audubon.org/field-guide/bird/osprey"
+      },
+      {
+        "title": "Pandion haliaetus, Animal Diversity Web",
         "url": "https://animaldiversity.org/accounts/Pandion_haliaetus/"
+      },
+      {
+        "title": "Osprey, Wikipedia",
+        "url": "https://en.wikipedia.org/wiki/Osprey"
       }
     ],
     "taxon_id": 116999
   },
   "quality_review": {
     "anatomy_accuracy": 5,
-    "composition_quality": 5,
+    "composition_quality": 4,
     "findings": [
-      "Candidate depicts a single, anatomically coherent Osprey: one head, one hooked black bill, two folded wings, two long legs with large curved talons, and one barred tail.",
-      "Plumage and proportions match the supplied references and live identification sources: brown upperparts, mostly white underparts, white head with broad dark eye stripe, pale blue-gray feet, and long narrow-winged raptor structure.",
-      "All visible measurements match Cornell\u2019s published ranges: length 54\u201358 cm, wingspan 150\u2013180 cm, and weight 1.4\u20132.0 kg.",
-      "The visible behavior, habitat, and field-mark text is supported by the checked sources. No place name, ZIP code, coordinates, map, or local-observation detail appears on the plate.",
-      "Minor wording note only: \u201cyellow to orange\u201d belongs to the eye-color palette rather than plumage proper; it is visually appropriate and not a material text error."
+      "Species identity, family, and measurements match standard references (All About Birds, Wikipedia) for Pandion haliaetus",
+      "Field marks (dark eye-stripe, brown upperparts/white underparts, carpal patch, mottled necklace, hooked bill, pale eye, grey legs) correctly rendered and consistent with attached reference photos",
+      "Anatomy verified correct: one head, one beak, two wings, two legs, one tail",
+      "No place names, coordinates, maps, or local-observation details present; location_free confirmed",
+      "No house-style violations detected: single flat sheet, no ruler/scale bar, no binding/spiral, no aged or torn edges, no dividers/frames around studies or swatches, page reasonably well filled",
+      "E-paper quantization (Image 2) introduces expected dither speckle noise over the brown wash areas, a native palette-conversion artifact rather than a content defect; text labels remain fully legible, high-contrast, and do not overlap the bird, studies, or swatches",
+      "Minor deduction to composition_quality for slightly reduced wash crispness under e-paper quantization, though bird remains identifiable and labels remain clear"
     ],
     "location_free": true,
     "passed": true,
@@ -72,12 +86,16 @@
     "text_accuracy": 5,
     "verification_sources": [
       {
-        "title": "Osprey Identification \u2014 All About Birds, Cornell Lab of Ornithology",
+        "title": "Osprey Identification, All About Birds",
         "url": "https://www.allaboutbirds.org/guide/Osprey/id"
       },
       {
-        "title": "Pandion haliaetus (osprey) \u2014 Animal Diversity Web",
-        "url": "https://animaldiversity.org/accounts/Pandion_haliaetus/"
+        "title": "Osprey, Wikipedia",
+        "url": "https://en.wikipedia.org/wiki/Osprey"
+      },
+      {
+        "title": "Osprey, Audubon Field Guide",
+        "url": "https://www.audubon.org/field-guide/bird/osprey"
       }
     ]
   },
@@ -122,17 +140,17 @@
       "width": 2048
     },
     {
-      "attribution": "no rights reserved",
-      "filename": "04-148993337.jpg",
-      "height": 2048,
-      "image_url": "https://inaturalist-open-data.s3.amazonaws.com/photos/148993337/large.jpg",
-      "license_code": "cc0",
-      "observation_id": 90170837,
-      "observer": "glennberry",
-      "photo_id": 148993337,
-      "sha256": "3728487cff11472887b7c09b00e3a8567f62cfada4bd3ced122439f759f4423e",
-      "source_url": "https://www.inaturalist.org/observations/90170837",
-      "width": 1664
+      "attribution": "(c) inbetweenbays, some rights reserved (CC BY)",
+      "filename": "04-628887823.jpg",
+      "height": 1365,
+      "image_url": "https://inaturalist-open-data.s3.amazonaws.com/photos/628887823/large.jpg",
+      "license_code": "cc-by",
+      "observation_id": 345111443,
+      "observer": "inbetweenbays",
+      "photo_id": 628887823,
+      "sha256": "fb8a0a92524635e21ce81328690f36413ff26868e7e92f68c38304ec150ba0d5",
+      "source_url": "https://www.inaturalist.org/observations/345111443",
+      "width": 2048
     }
   ],
   "schema_version": 1,

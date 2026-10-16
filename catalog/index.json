@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-11T09:58:26+00:00",
+  "generated_at": "2026-09-16T00:18:58+00:00",
   "schema_version": 1,
   "species": [
     {
@@ -740,12 +740,12 @@
       "taxon_id": 145233
     },
     {
-      "approved_at": "2026-07-13T05:55:39+00:00",
+      "approved_at": "2026-09-16T00:18:58+00:00",
       "common_name": "Osprey",
       "display_path": "species/116999-osprey/display.png",
-      "display_sha256": "4652f0b3a9401392ef0ea3cc376bc20db112090785efbee066830c9849344d7e",
+      "display_sha256": "7e526ba3f2c6b4176c16a7a01ce9781b723b5f77c2f4bfc3fbc497d15e002169",
       "portrait_path": "species/116999-osprey/portrait.png",
-      "portrait_sha256": "2e0b58890600fe71d9638093235435fafd82416292a141722248e1c75df2528a",
+      "portrait_sha256": "701ddd9291e93e10bf29e42c3aa49a5b3f2e17c97cf3194d2e68ff08d31e9147",
       "scientific_name": "Pandion haliaetus",
       "slug": "osprey",
       "taxon_id": 116999
