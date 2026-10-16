@@ -9,7 +9,7 @@ from pathlib import Path
 from .birds import BirdSpecies, TaxonContext
 from .models import ReferencePhoto, SpeciesProfileData
 
-PROMPT_VERSION = "field-journal-v3"
+PROMPT_VERSION = "field-journal-v4"
 
 
 class _TextExtractor(HTMLParser):
@@ -128,7 +128,12 @@ Style and composition:
 - Fine graphite and confident ink linework with restrained transparent watercolor.
 - One full-body bird, large and centered-right, in a natural perched posture.
 - Left margin contains compact handwritten measurements and field marks.
-- Bottom margin contains a small wing-pattern study, a bill/head study, and color swatches.
+- Bottom margin contains a small wing-pattern study, a head study, and color swatches. The head
+  study must add information the main bird does not already show, not a copy of its head at a
+  smaller size: either a magnified close-up of one diagnostic head feature (bill, eye, or facial
+  pattern) in finer detail and a different crop, or, when the sexes, ages, or colour morphs differ
+  visibly, the head of a plumage the main bird does not show (opposite sex, juvenile, or distinct
+  morph). It stays a single anatomically accurate head drawn on bare paper with no box.
 - Right edge contains a thin measurement ruler.
 - It should look like a carefully scanned scientific field-journal page, not Audubon, not a
   decorative poster, not a collage, and not photorealistic.

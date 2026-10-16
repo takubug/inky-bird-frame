@@ -165,10 +165,19 @@ Style and composition:
 - One full-body bird, large, filling the middle and right of the page in a natural perched
   posture; it may reach down toward the bottom band but must not enter the left third above it.
 - Along the bottom quarter of the page, as one row from left to right spanning the full width:
-  one wing-pattern study, one bill/head study, and one row of unlabeled color swatches. Exactly
+  one wing-pattern study, one head study, and one row of unlabeled color swatches. Exactly
   those three elements, kept inside the bottom quarter; no other figures, studies, or flight
   poses anywhere. They sit directly on the bare paper: no boxes, cells, frames, table lines,
   divider lines, or underlines around, between, or beneath them.
+- The head study must add information the main portrait does not already show; it must not be a
+  copy of the main bird's head at a smaller size. Make it exactly one of these: (a) a magnified
+  close-up of a single diagnostic head feature — the bill's shape and structure, the eye and its
+  ring, or the facial pattern — drawn larger and in finer detail than the main bird and framed
+  from a different angle or crop; or (b) when the sexes, ages, or colour morphs of this species
+  differ visibly, the head of a plumage the main bird does NOT show — the opposite sex, a
+  juvenile, or a distinct colour morph. Choose (b) whenever such a visible difference exists;
+  otherwise use (a). It stays a single head drawn on bare paper with no box, and must be
+  anatomically accurate for whatever sex, age, or morph it depicts.
 - Fill the page: no large empty regions apart from the reserved label area described below.
 - No ruler, scale bar, tick marks, or measurement marks of any kind, anywhere on the page.
 - It should look like a carefully scanned scientific field-journal page, not Audubon, not a
@@ -813,6 +822,12 @@ against the attached field-reference photos. Compare every visible factual claim
 independently verified facts. Confirm that no place name, ZIP code, coordinates, map, or
 local-observation detail appears. Record every concrete issue and return at least two direct HTTPS
 source URLs from distinct configured domains used for verification.
+
+The small head study in the bottom row may deliberately depict a different sex, age, or colour
+morph from the main bird for a species where they differ, or a magnified close-up of one head
+feature. Judge it accurate for whatever sex, age, or morph it shows; do not lower any score or set
+passed=false merely because it differs from the main bird, and do not count it as a second bird or
+a second head. The one-head, one-beak anatomy check below applies only to the main specimen.
 
 All lettering on the plate was composited by software from the verified profile in a fixed font,
 so its spelling is exact by construction: do not lower text_accuracy for the typeface. Check only
