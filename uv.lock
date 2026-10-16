@@ -453,14 +453,14 @@ wheels = [
 
 [[package]]
 name = "gpiodevice"
-version = "0.0.5"
+version = "0.1.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "gpiod" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/bf/4f/c1b1266953cfcd0708e2a4376696e42b69bc5fe3559a66e2eb71501ac072/gpiodevice-0.0.5.tar.gz", hash = "sha256:cca01ff4319e0ba906ff46dcb8113d8d532b3f5ee03d683d8a11037c8e89140c", size = 10602, upload-time = "2024-04-29T09:33:28.181Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/8c/5a/919e85d28bd761a53bfaec4e54eac217b216895473993fd0ee249a1f1ccc/gpiodevice-0.1.0.tar.gz", hash = "sha256:823185e2230aba7a015f00b9f8045840f8f9253d2d58c76950065f446eb417b2", size = 19303, upload-time = "2026-08-25T14:24:30.374Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/d1/55/2ecb558c8f5a4700b2e7cc5a8d6077347543cd2c3e0c7de72b8a35d4afa4/gpiodevice-0.0.5-py3-none-any.whl", hash = "sha256:b808250cd1d89379b69f98cc6442b6b098aa32604c3ed7fb194a39607ee35253", size = 9227, upload-time = "2024-04-29T09:33:26.52Z" },
+    { url = "https://files.pythonhosted.org/packages/6e/b0/18437d9b784086b70ff9503c18e8b51d6905d382f3c695f9b3c70f85e91d/gpiodevice-0.1.0-py3-none-any.whl", hash = "sha256:4d1716ebed3068dd233e9851612773cbdf7a194289b8ea0aaf712f2fe90b1adb", size = 12705, upload-time = "2026-08-25T14:24:29.26Z" },
 ]
 
 [[package]]
@@ -520,7 +520,7 @@ wheels = [
 
 [[package]]
 name = "inky"
-version = "2.4.0"
+version = "2.6.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "gpiodevice" },
@@ -530,9 +530,9 @@ dependencies = [
     { name = "smbus2" },
     { name = "spidev" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/91/52/083b6e1b90396e2b8d07ad977e669a6fb18f6514edc8c2f873743abd78ca/inky-2.4.0.tar.gz", hash = "sha256:325822feaae9a6c9613e53e9cb3ed34b8a7f655561cdc0a43a9e37d149f30821", size = 16158715, upload-time = "2026-04-14T15:02:37.832Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/c6/1f/3dc4804c0e948caf36d18b6bb30318ae4b6ae06d856b258b85ad171d1498/inky-2.6.0.tar.gz", hash = "sha256:bf9e6d8d6d7b2a5b34ab3e82bd26fe3b5ccdffcbf7c01c3b49d74df1f2f85679", size = 16160772, upload-time = "2026-10-15T13:49:54.232Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/27/e4/286711aaf7b9ab51a1874daae3d5ddd97df3f7dd60b8b8d4660fcb4aa4f0/inky-2.4.0-py3-none-any.whl", hash = "sha256:3471f6838b35825317ff63ff9687f758e37ca64a64888d1ca79d8457049058e0", size = 64041, upload-time = "2026-04-14T15:02:34.972Z" },
+    { url = "https://files.pythonhosted.org/packages/96/23/e98b814b6ea6336fd80fea41747b5374610e32d8bae398c8246500cc23dc/inky-2.6.0-py3-none-any.whl", hash = "sha256:3fd163e937f14f973e593a69e9558eba6fe666d5e46a17e7a82ff30849d7d009", size = 61694, upload-time = "2026-10-15T13:49:52.305Z" },
 ]
 
 [[package]]
@@ -571,7 +571,7 @@ requires-dist = [
     { name = "apprise", marker = "extra == 'dev'", specifier = ">=1.12.0,<2" },
     { name = "google-genai", marker = "extra == 'claude'", specifier = ">=1.28" },
     { name = "google-genai", marker = "extra == 'dev'", specifier = ">=1.28" },
-    { name = "inky", marker = "extra == 'inky'", specifier = ">=2.4" },
+    { name = "inky", marker = "extra == 'inky'", specifier = ">=2.5" },
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.8.0" },
     { name = "pillow", specifier = ">=10.0" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0.0" },
