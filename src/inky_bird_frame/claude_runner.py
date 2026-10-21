@@ -169,15 +169,19 @@ Style and composition:
   those three elements, kept inside the bottom quarter; no other figures, studies, or flight
   poses anywhere. They sit directly on the bare paper: no boxes, cells, frames, table lines,
   divider lines, or underlines around, between, or beneath them.
-- The head study must add information the main portrait does not already show; it must not be a
-  copy of the main bird's head at a smaller size. Make it exactly one of these: (a) a magnified
-  close-up of a single diagnostic head feature — the bill's shape and structure, the eye and its
-  ring, or the facial pattern — drawn larger and in finer detail than the main bird and framed
-  from a different angle or crop; or (b) when the sexes, ages, or colour morphs of this species
-  differ visibly, the head of a plumage the main bird does NOT show — the opposite sex, a
-  juvenile, or a distinct colour morph. Choose (b) whenever such a visible difference exists;
-  otherwise use (a). It stays a single head drawn on bare paper with no box, and must be
-  anatomically accurate for whatever sex, age, or morph it depicts.
+- The head study must add information the main portrait does not already show; it must NOT be the
+  main bird's head redrawn at a smaller size or merely re-angled. First decide whether this species
+  has a visibly different plumage to show: a difference between the sexes, a distinct
+  immature/juvenile plumage, or separate colour morphs. If it does — i.e. it is sexually dimorphic,
+  or has significant age variation, or is polymorphic — the head study MUST depict a plumage the
+  main bird does NOT: preferably the opposite sex, otherwise an immature/juvenile or a distinct
+  morph. This is required for such species; do not instead draw another view of the plumage the
+  main bird already shows. Only when the head looks essentially the same across sex, age, and morph
+  may you instead use a magnified close-up or an alternative-perspective view of one diagnostic head
+  feature — the bill's shape and structure, the eye and its ring, or the facial pattern — drawn
+  larger and in finer detail from a clearly different angle or crop. Either way it stays a single
+  head on bare paper with no box, reads as clearly distinct from the main head, and is anatomically
+  accurate for whatever sex, age, or morph it depicts.
 - Fill the page: no large empty regions apart from the reserved label area described below.
 - No ruler, scale bar, tick marks, or measurement marks of any kind, anywhere on the page.
 - It should look like a carefully scanned scientific field-journal page, not Audubon, not a

@@ -9,7 +9,7 @@ from pathlib import Path
 from .birds import BirdSpecies, TaxonContext
 from .models import ReferencePhoto, SpeciesProfileData
 
-PROMPT_VERSION = "field-journal-v4"
+PROMPT_VERSION = "field-journal-v5"
 
 
 class _TextExtractor(HTMLParser):
@@ -129,11 +129,14 @@ Style and composition:
 - One full-body bird, large and centered-right, in a natural perched posture.
 - Left margin contains compact handwritten measurements and field marks.
 - Bottom margin contains a small wing-pattern study, a head study, and color swatches. The head
-  study must add information the main bird does not already show, not a copy of its head at a
-  smaller size: either a magnified close-up of one diagnostic head feature (bill, eye, or facial
-  pattern) in finer detail and a different crop, or, when the sexes, ages, or colour morphs differ
-  visibly, the head of a plumage the main bird does not show (opposite sex, juvenile, or distinct
-  morph). It stays a single anatomically accurate head drawn on bare paper with no box.
+  study must add information the main bird does not already show, not its head redrawn smaller or
+  merely re-angled. If the species is sexually dimorphic, has significant age variation, or is
+  polymorphic, the head study MUST show a plumage the main bird does not — preferably the opposite
+  sex, otherwise an immature/juvenile or a distinct morph. Only for species whose head looks
+  essentially the same across sex, age, and morph, use instead a magnified close-up or
+  alternative-perspective view of one diagnostic head feature (bill, eye, or facial pattern) in
+  finer detail and a different crop. It stays a single anatomically accurate head on bare paper
+  with no box, clearly distinct from the main head.
 - Right edge contains a thin measurement ruler.
 - It should look like a carefully scanned scientific field-journal page, not Audubon, not a
   decorative poster, not a collage, and not photorealistic.
