@@ -169,19 +169,21 @@ Style and composition:
   those three elements, kept inside the bottom quarter; no other figures, studies, or flight
   poses anywhere. They sit directly on the bare paper: no boxes, cells, frames, table lines,
   divider lines, or underlines around, between, or beneath them.
-- The head study must add information the main portrait does not already show; it must NOT be the
-  main bird's head redrawn at a smaller size or merely re-angled. First decide whether this species
-  has a visibly different plumage to show: a difference between the sexes, a distinct
-  immature/juvenile plumage, or separate colour morphs. If it does — i.e. it is sexually dimorphic,
-  or has significant age variation, or is polymorphic — the head study MUST depict a plumage the
-  main bird does NOT: preferably the opposite sex, otherwise an immature/juvenile or a distinct
-  morph. This is required for such species; do not instead draw another view of the plumage the
-  main bird already shows. Only when the head looks essentially the same across sex, age, and morph
-  may you instead use a magnified close-up or an alternative-perspective view of one diagnostic head
-  feature — the bill's shape and structure, the eye and its ring, or the facial pattern — drawn
-  larger and in finer detail from a clearly different angle or crop. Either way it stays a single
-  head on bare paper with no box, reads as clearly distinct from the main head, and is anatomically
-  accurate for whatever sex, age, or morph it depicts.
+- The head study must add information the main portrait does not already show; it must NEVER be the
+  main bird's head reproduced at the same viewing angle and plumage, only larger or slightly
+  re-angled. First decide whether this species has a visibly different plumage to show: a difference
+  between the sexes, a distinct immature/juvenile plumage, or separate colour morphs. If it does —
+  i.e. it is sexually dimorphic, has a distinct juvenile/immature plumage, or is polymorphic — the
+  head study MUST depict a plumage the main bird does NOT: preferably the opposite sex, otherwise a
+  juvenile/immature or a distinct morph. This is required for such species; do not instead draw
+  another view of the plumage the main bird already shows. Only when the head looks essentially the
+  same across sex, age, and morph may you instead draw a detail study of that same plumage — and
+  then it MUST clearly differ in viewpoint or framing from the main bird: if the main bird is shown
+  in profile or three-quarter view, draw the head study front-on or from the opposite side, OR crop
+  in tightly on a single diagnostic feature (the bill's shape and structure, the eye and its ring,
+  or the facial pattern) instead of repeating the whole head. Either way it stays a single head on
+  bare paper with no box, reads as clearly distinct from the main head at a glance, and is
+  anatomically accurate for whatever sex, age, or morph it depicts.
 - Fill the page: no large empty regions apart from the reserved label area described below.
 - No ruler, scale bar, tick marks, or measurement marks of any kind, anywhere on the page.
 - It should look like a carefully scanned scientific field-journal page, not Audubon, not a
@@ -832,6 +834,14 @@ morph from the main bird for a species where they differ, or a magnified close-u
 feature. Judge it accurate for whatever sex, age, or morph it shows; do not lower any score or set
 passed=false merely because it differs from the main bird, and do not count it as a second bird or
 a second head. The one-head, one-beak anatomy check below applies only to the main specimen.
+The head study must, however, add information the main portrait does not already show. Score
+composition_quality 3 or lower and set passed=false if it is simply the main bird's head at
+essentially the same viewing angle and plumage, only enlarged or slightly re-angled, so it adds
+nothing new. For a sexually dimorphic, age-variable, or polymorphic species it should show a
+plumage the main bird does not (the opposite sex, a juvenile/immature, or another morph); for a
+species whose plumage is uniform across sex and age it must at least differ clearly in viewpoint or
+framing (a distinctly different angle, or a tight single-feature crop of the bill, eye, or mask).
+Judge that distinctness, not merely whether it is a valid head.
 
 All lettering on the plate was composited by software from the verified profile in a fixed font,
 so its spelling is exact by construction: do not lower text_accuracy for the typeface. Check only
