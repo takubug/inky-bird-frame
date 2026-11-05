@@ -833,6 +833,16 @@ feature. Judge it accurate for whatever sex, age, or morph it shows; do not lowe
 passed=false merely because it differs from the main bird, and do not count it as a second bird or
 a second head. The one-head, one-beak anatomy check below applies only to the main specimen.
 
+The head study must also add information the main bird does not already show. Decide which kind it
+is (opposite sex, immature/juvenile, distinct morph, or magnified close-up of one head feature) and
+whether this species differs visibly by sex, age, or morph, and record that in the issues. It is a
+duplicate when it shows the same plumage as the main head at a similar angle and crop, merely
+smaller or slightly re-angled; when the species has a different sex, juvenile, or morph plumage the
+main bird does not show yet the head study repeats the main bird's plumage; or when a close-up is
+not clearly larger, more detailed, or differently cropped than the main head. A duplicate head
+study is a house-style failure: record it as an issue, score composition_quality 3 or lower, and
+set passed=false.
+
 All lettering on the plate was composited by software from the verified profile in a fixed font,
 so its spelling is exact by construction: do not lower text_accuracy for the typeface. Check only
 that every label is legible on Image 2 and that no label overlaps the bird, the studies, or the

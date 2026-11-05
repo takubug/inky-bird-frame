@@ -9,7 +9,7 @@ from pathlib import Path
 from .birds import BirdSpecies, TaxonContext
 from .models import ReferencePhoto, SpeciesProfileData
 
-PROMPT_VERSION = "field-journal-v5"
+PROMPT_VERSION = "field-journal-v6"
 
 
 class _TextExtractor(HTMLParser):
@@ -173,6 +173,13 @@ against the attached field-reference photos. Compare every visible factual claim
 independently verified facts. Confirm that no place name, ZIP code, coordinates, map, or
 local-observation detail appears. Record every concrete issue and return at least two direct HTTPS
 source URLs from distinct configured domains used for verification.
+
+The small head study in the bottom row may deliberately show a different sex, age, or colour morph,
+or a magnified close-up of one head feature; judge it accurate for what it depicts and do not count
+it as a second head. It must add information the main bird does not already show. If it repeats the
+main head's plumage at a similar angle and crop, merely smaller or slightly re-angled, or repeats
+the main plumage for a species with a visibly different sex, juvenile, or morph, record that as an
+issue and score composition_quality 3 or lower.
 
 Set passed=true only when all four scores are at least 4, location_free is true, the bird has
 exactly one head, one beak, two wings, two legs, and one tail, and there are no material species or
