@@ -178,6 +178,15 @@ class ReviewPromptTests(unittest.TestCase):
         self.assertIn("spiral, spine, or gutter", prompt)
         self.assertIn("inset panel", prompt)
 
+    def test_review_fails_a_head_study_that_duplicates_the_main_head(self) -> None:
+        prompt = review_prompt_with_preview(_species(), _profile(), [_reference()], ("a.example",))
+        # Tolerating an alternate-plumage head study must not shield a copy of
+        # the main head: a duplicate has to cost composition_quality and fail.
+        self.assertIn("The head study must also add information", prompt)
+        self.assertIn("whether this species differs visibly by sex, age, or morph", prompt)
+        self.assertIn("A duplicate head\nstudy is a house-style failure", prompt)
+        self.assertIn("score composition_quality 3 or lower, and\nset passed=false", prompt)
+
 
 class FontAndCompositeTests(unittest.TestCase):
     def test_bundled_font_is_the_default(self) -> None:

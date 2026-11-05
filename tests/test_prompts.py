@@ -5,7 +5,7 @@ from pathlib import Path
 
 from inky_bird_frame.birds import BirdSpecies
 from inky_bird_frame.models import ReferencePhoto, SpeciesProfileData
-from inky_bird_frame.prompts import plate_prompt
+from inky_bird_frame.prompts import plate_prompt, review_prompt
 
 
 class PromptTests(unittest.TestCase):
@@ -76,6 +76,26 @@ class PromptTests(unittest.TestCase):
 
         self.assertIn("Correct the wing bars", prompt)
         self.assertIn("Create a new image", prompt)
+
+    def test_review_prompt_penalises_a_head_study_that_duplicates_the_main_head(self) -> None:
+        species = BirdSpecies(12942, "Eastern Bluebird", "Sialia sialis", 26, "iNaturalist")
+        profile = SpeciesProfileData(
+            taxon_id=12942,
+            common_name="Eastern Bluebird",
+            scientific_name="Sialia sialis",
+            family="Turdidae",
+            measurements={"length": "7 in", "wingspan": "12 in", "weight": "1 oz"},
+            field_marks=["blue head"],
+            habitat="Open woodland",
+            behavior="Drops from perches to forage",
+            palette=["blue"],
+            sources=[{"title": "A", "url": "https://example.test/a"}],
+        )
+
+        prompt = review_prompt(species, profile, [], ("example.test",))
+
+        self.assertIn("It must add information the main bird does not already show", prompt)
+        self.assertIn("score composition_quality 3 or lower", prompt)
 
 
 if __name__ == "__main__":
