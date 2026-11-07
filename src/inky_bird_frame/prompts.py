@@ -9,7 +9,7 @@ from pathlib import Path
 from .birds import BirdSpecies, TaxonContext
 from .models import ReferencePhoto, SpeciesProfileData
 
-PROMPT_VERSION = "field-journal-v6"
+PROMPT_VERSION = "field-journal-v7"
 
 
 class _TextExtractor(HTMLParser):
@@ -129,15 +129,15 @@ Style and composition:
 - One full-body bird, large and centered-right, in a natural perched posture.
 - Left margin contains compact handwritten measurements and field marks.
 - Bottom margin contains a small wing-pattern study, a head study, and color swatches. The head
-  study must add information the main bird does not already show; it must never be the main bird's
-  head at the same viewing angle and plumage, only larger. If the species is sexually dimorphic,
-  has a distinct juvenile/immature plumage, or is polymorphic, the head study MUST show a plumage
-  the main bird does not — preferably the opposite sex, otherwise a juvenile/immature or a distinct
-  morph. Only for species whose head looks essentially the same across sex and age may it instead be
-  a detail study of that plumage, and then it must clearly differ in viewpoint or framing: if the
-  main bird is in profile or three-quarter view, draw it front-on or from the opposite side, or crop
-  tightly on one diagnostic feature (bill, eye, or mask). It stays a single anatomically accurate
-  head on bare paper with no box, clearly distinct from the main head at a glance.
+  study must add information the main bird does not already show; a larger, tighter, or more
+  detailed crop of its head at the same viewing angle and plumage does NOT count. Strongly prefer:
+  if the species has any distinct alternate plumage (sexually dimorphic even subtly, a distinct
+  juvenile/immature, or a colour morph), the head study MUST show a plumage the main bird does not —
+  the opposite sex, a juvenile/immature, or a morph. Only for a species whose head is the same
+  across sex, age, and morph may it be a detail study of that plumage, and then from a clearly
+  different viewing angle (head-on or opposite side, never the same angle zoomed) or a true macro of
+  one feature (just the bill or eye). It stays a single anatomically accurate head on bare paper
+  with no box, obviously distinct from the main head at a glance.
 - Right edge contains a thin measurement ruler.
 - It should look like a carefully scanned scientific field-journal page, not Audubon, not a
   decorative poster, not a collage, and not photorealistic.
