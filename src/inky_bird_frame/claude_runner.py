@@ -158,14 +158,25 @@ Style and composition:
   book or notebook; no binding, spiral, spine, or gutter; no page edges, curl, or shadow; no desk
   or surface behind it; no border, inset panel, or pasted card anywhere; and no ruled lines,
   column rules, folds, or creases drawn across the page. Keep the ageing subtle so the paper
-  never competes with the drawing.
+  never competes with the drawing. The cream tone is uniform across the entire sheet: the same
+  from the center to every edge and corner, with no vignette, no darkened, shadowed, or dirtied
+  edges or corners, and no uneven blotching or tonal gradient anywhere.
 - Fine graphite and confident ink linework with restrained transparent watercolor.
 - Bold, crisp, high-contrast lines and flat watercolor washes that survive a six-color e-paper
   panel; avoid soft gradients, airbrushed shading, and low-contrast detail.
 - One full-body bird, large, filling the middle and right of the page in a natural perched
   posture; it may reach down toward the bottom band but must not enter the left third above it.
 - Along the bottom quarter of the page, as one row from left to right spanning the full width:
-  one wing-pattern study, one head study, and one row of unlabeled color swatches. Exactly
+  one wing-pattern study, one head study, and one row of unlabeled color swatches. Each swatch
+  is a single color painted as a natural watercolor wash: gentle tonal variation within the swatch
+  and soft, slightly uneven edges that may spill a little past the rectangle are expected and
+  welcome, so it looks hand-painted rather than a flat digital fill. A swatch may also carry the
+  natural iridescent sheen of a glossy plumage color, for example a glossy black shot with a hint
+  of blue, green, or purple, because that is still one iridescent color. A swatch must never be two
+  or more distinct plumage colors blended or juxtaposed to stand for different parts of the bird, a
+  checkerboard, grid, stripe, or other repeating or geometric pattern, a drawn object, feature, or
+  icon (such as an eye, feather, or bill), or any painted word, number, or color name. Use one
+  swatch per distinct plumage color, with no fixed number. Exactly
   those three elements, kept inside the bottom quarter; no other figures, studies, or flight
   poses anywhere. They sit directly on the bare paper: no boxes, cells, frames, table lines,
   divider lines, or underlines around, between, or beneath them.
@@ -860,7 +871,17 @@ marks, or measurement marks; a visible notebook binding, spiral, spine, or gutte
 or aged page edge; stains, foxing, or heavy ageing marks on the paper; a drawn vertical or
 horizontal line, fold, or crease running through the label area; any box, cell, frame, table
 line, or divider drawn around, between, or beneath the studies or swatches; or the bird or any
-study placed inside a drawn border, inset panel, or pasted card. Also lower composition_quality
+study placed inside a drawn border, inset panel, or pasted card. Also set passed=false for any
+color swatch that combines two or more distinct plumage colors standing for different parts of the
+bird, or that is anything other than painted color: a checkerboard, grid, stripe, or other
+repeating or geometric pattern; a drawn object, feature, or icon (such as an eye, feather, or
+bill); or a painted word, number, or color name. Natural watercolor qualities are NOT defects: do
+not fail or lower a swatch for gentle tonal variation within a single color, for a subtle
+iridescent sheen on a glossy color (for example a hint of blue, green, or purple in a glossy
+black), or for soft, slightly uneven edges that run a little past the rectangle. Also set
+passed=false for a paper background whose tone is not uniform across the sheet: visible vignetting,
+darkened or shadowed edges or corners, or uneven blotching or tonal gradient. Also lower
+composition_quality
 for a poorly filled page: a large empty region (for example a blank lower-left corner beneath a
 short label column) or a bird drawn small in a sea of paper reads as unfinished.
 

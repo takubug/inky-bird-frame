@@ -9,7 +9,7 @@ from pathlib import Path
 from .birds import BirdSpecies, TaxonContext
 from .models import ReferencePhoto, SpeciesProfileData
 
-PROMPT_VERSION = "field-journal-v7"
+PROMPT_VERSION = "field-journal-v8"
 
 
 class _TextExtractor(HTMLParser):
@@ -68,7 +68,11 @@ Requirements:
 - Preserve the exact taxon ID and names supplied above.
 - Measurements must include units and a compact range suitable for a field note.
 - Provide 4 to 6 concise, visible field marks.
-- Provide 3 to 5 plain-language palette colors tied to the species.
+- Provide the distinct plumage and bare-part colors of the species as plain-language palette
+colors: one per genuinely distinct color, as many as the species needs and no more, with no fixed
+count. Every entry must be a color that can be shown as a single plain wash; do not list a feature
+or body part that is not itself a color (for example never 'eye' on its own), which an illustrator
+would otherwise draw as an object.
 - Source URLs must be direct HTTPS pages used for the facts.
 - Do not mention ZIP codes, cities, coordinates, observations, or any local discovery context.
 """
