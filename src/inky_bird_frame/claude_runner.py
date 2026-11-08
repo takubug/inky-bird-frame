@@ -517,7 +517,7 @@ def composite_plate_labels(image: Any, profile: SpeciesProfileData) -> bool:
     # must end above the bottom 30% of the page. Shrink the body face until the
     # measurements and field marks fit; never spill into the studies' band.
     label_floor = height * 7 // 10
-    body_size = max(width // 44, 10)
+    body_size = max(width // 40, 10)
     minimum_body = max(width // 70, 8)
     # Plates must read as one set, so the measurement line limits may only pull
     # the face down a little (qualifiers are trimmed first); the bottom-band rule
