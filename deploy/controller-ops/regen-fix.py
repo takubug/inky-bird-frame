@@ -3,13 +3,14 @@
 Generates a fresh candidate whose first attempt already carries the human's
 correction, leaves it in pending, and queues the pending notification.
 """
+
 import sys
 from pathlib import Path
 
+from inky_bird_frame.cli import _pending_notification_links
 from inky_bird_frame.config import NotificationEvent, load_config
 from inky_bird_frame.controller import _read_discovery_snapshot, generate_candidate
 from inky_bird_frame.notifications import safe_notify
-from inky_bird_frame.cli import _pending_notification_links
 
 taxon = int(sys.argv[1])
 finding = " ".join(sys.argv[2:]).strip()
