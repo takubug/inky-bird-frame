@@ -247,6 +247,28 @@ class FontAndCompositeTests(unittest.TestCase):
             )[1]:
                 self.assertEqual(line.count("("), line.count(")"), line)
 
+    def test_a_short_metric_value_keeps_its_unit_when_the_column_narrows(self) -> None:
+        from PIL import Image, ImageDraw
+
+        from inky_bird_frame.claude_runner import _dangles, _label_font, _measurement_lines
+
+        profile = _profile()
+        profile["measurements"]["wingspan"] = "18–23 cm"
+        draw = ImageDraw.Draw(Image.new("RGB", PORTRAIT_SIZE, PAPER_COLOR))
+        width = PORTRAIT_SIZE[0]
+        full_column = width * 3 // 10
+        # A tail sweeping into the column narrows the measurement block. At a
+        # narrow width "Wingspan: 18-23 cm" no longer fits on one line, but the
+        # unit must never be orphaned ("cm" alone); it rides with the figure on a
+        # second line after the label instead.
+        for narrow in (full_column, full_column * 3 // 4, full_column * 3 // 5):
+            for size in range(max(width // 40, 10), max(width // 70, 8) - 1, -1):
+                wingspan = _measurement_lines(draw, profile, _label_font(size), narrow)[1]
+                self.assertLessEqual(len(wingspan), 2, (narrow, size, wingspan))
+                self.assertFalse(_dangles(wingspan), (narrow, size, wingspan))
+                figure_line = next(line for line in wingspan if any(c.isdigit() for c in line))
+                self.assertIn("cm", figure_line, (narrow, size, wingspan))
+
     def test_measurements_without_a_figure_are_left_off_the_plate(self) -> None:
         from inky_bird_frame.claude_runner import _measurement_specs
 

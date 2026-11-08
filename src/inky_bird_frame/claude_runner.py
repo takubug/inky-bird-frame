@@ -735,6 +735,17 @@ def _fitted_measurement(
                 and draw.textlength(paren, font=body_font) <= column_width
             ):
                 options.append([head, paren])
+        # A value and its unit must never split across lines ("cm" alone below the
+        # figure). When the whole line will not fit, break after the label instead,
+        # keeping the value and unit together on the second line.
+        if (len(plain) > limit or _dangles(plain)) and limit >= 2:
+            value_line = candidate.strip()
+            if (
+                value_line
+                and draw.textlength(f"{label}:", font=body_font) <= column_width
+                and draw.textlength(value_line, font=body_font) <= column_width
+            ):
+                options.append([f"{label}:", value_line])
         for wrapped in options:
             if len(wrapped) > limit or _dangles(wrapped):
                 continue
